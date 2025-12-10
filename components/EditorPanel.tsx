@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { InvitationData, Language, LABELS, LocalizedContent, STICKER_ASSETS, FontStyle, FONT_OPTIONS } from '../types';
-import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2 } from 'lucide-react';
 import { generateStory } from '../services/geminiService';
 import { saveInvitationData } from '../services/storageService';
 
@@ -134,13 +134,23 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
   };
   
   const handleSaveConnection = () => {
-    if (inputBinId.trim()) {
-      onBinIdChange(inputBinId.trim());
+    const cleanedBinId = inputBinId.trim();
+    if (cleanedBinId) {
+      onBinIdChange(cleanedBinId);
     }
     if (apiKey.trim()) {
       localStorage.setItem('jsonbin_api_key', apiKey.trim());
     }
     setShowConfigModal(false);
+  };
+
+  const handleDisconnect = () => {
+    if (window.confirm("Are you sure you want to disconnect? This will clear the Bin ID from this browser.")) {
+        localStorage.removeItem('jsonbin_bin_id');
+        onBinIdChange(''); // Propagate clear to App
+        setInputBinId('');
+        setShowConfigModal(false);
+    }
   };
 
   const handleSaveToCloud = async () => {
@@ -260,20 +270,30 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
           <div className="flex gap-2">
              {/* Dynamic Save Button */}
              {binId ? (
-               <button
-                 onClick={handleSaveToCloud}
-                 disabled={isSaving}
-                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white transition-all shadow-md transform hover:scale-105 ${
-                   saveStatus === 'success' ? 'bg-green-500' :
-                   saveStatus === 'error' ? 'bg-red-500' :
-                   'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
-                 }`}
-               >
-                 {isSaving ? <UploadCloud className="w-3.5 h-3.5 animate-bounce" /> : 
-                  saveStatus === 'success' ? <CheckCircle2 className="w-3.5 h-3.5" /> : 
-                  <Save className="w-3.5 h-3.5" />}
-                 {isSaving ? 'Saving...' : saveStatus === 'success' ? 'Saved!' : 'Publish'}
-               </button>
+               <>
+                 <button
+                   onClick={handleSaveToCloud}
+                   disabled={isSaving}
+                   className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white transition-all shadow-md transform hover:scale-105 ${
+                     saveStatus === 'success' ? 'bg-green-500' :
+                     saveStatus === 'error' ? 'bg-red-500' :
+                     'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
+                   }`}
+                 >
+                   {isSaving ? <UploadCloud className="w-3.5 h-3.5 animate-bounce" /> : 
+                    saveStatus === 'success' ? <CheckCircle2 className="w-3.5 h-3.5" /> : 
+                    <Save className="w-3.5 h-3.5" />}
+                   {isSaving ? 'Saving...' : saveStatus === 'success' ? 'Saved!' : 'Publish'}
+                 </button>
+                 {/* Explicit Config Button when Connected */}
+                 <button
+                   onClick={() => setShowConfigModal(true)}
+                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all border border-gray-200"
+                 >
+                   <Settings className="w-3.5 h-3.5" />
+                   Config
+                 </button>
+               </>
              ) : (
                <button
                  onClick={() => setShowConfigModal(true)}
@@ -359,7 +379,19 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
                    </div>
                 </div>
                 
-                <div className="mt-6 flex justify-end gap-3">
+                <div className="mt-6 flex justify-end gap-3 items-center">
+                   {/* Disconnect Button */}
+                   {binId && (
+                       <button 
+                            onClick={handleDisconnect}
+                            className="mr-auto px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-1"
+                            title="Disconnect stored Bin ID"
+                       >
+                            <Trash2 className="w-4 h-4" />
+                            Disconnect
+                       </button>
+                   )}
+
                    <button onClick={() => setShowConfigModal(false)} className="px-5 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold text-gray-700">
                      Cancel
                    </button>
