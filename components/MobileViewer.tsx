@@ -434,6 +434,12 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
                       <p className={`${s.fontClass} tracking-[0.2em] uppercase text-lg border-y border-white/30 py-1 px-4`} style={{ color: s.color === 'text-white' ? undefined : s.color, transform: `scale(${s.scale})` }}>
                         {formatDate(data.date)}
                       </p>
+                      {/* ADDED TIME DISPLAY HERE */}
+                      {data.time && (
+                         <p className={`${s.fontClass} tracking-widest uppercase text-sm mt-1.5 opacity-90`} style={{ color: s.color === 'text-white' ? undefined : s.color, transform: `scale(${s.scale})` }}>
+                           {data.time}
+                         </p>
+                      )}
                     </div>
                   );
                })()}
