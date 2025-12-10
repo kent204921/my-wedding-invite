@@ -38,10 +38,11 @@ interface EditorPanelProps {
   lang: Language;
   selectedId: string | null;
   onSelectElement?: (id: string | null) => void;
-  binId?: string; // New prop for cloud saving
+  binId: string | null;
+  onBinIdChange: (id: string) => void;
 }
 
-const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selectedId, onSelectElement, binId }) => {
+const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selectedId, onSelectElement, binId, onBinIdChange }) => {
   const t = LABELS[lang];
   const [isGenerating, setIsGenerating] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -50,13 +51,15 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
   // Cloud Saving State
   const [isSaving, setIsSaving] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [inputBinId, setInputBinId] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // Load API Key from local storage on mount
+  // Load configuration from local storage/props on mount or when modal opens
   useEffect(() => {
     const savedKey = localStorage.getItem('jsonbin_api_key');
     if (savedKey) setApiKey(savedKey);
-  }, []);
+    if (binId) setInputBinId(binId);
+  }, [binId, showConfigModal]);
 
   // Helper functions
   const handleSharedChange = (field: keyof InvitationData, value: any) => {
@@ -129,22 +132,33 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
       setIsGenerating(false);
     }
   };
+  
+  const handleSaveConnection = () => {
+    if (inputBinId.trim()) {
+      onBinIdChange(inputBinId.trim());
+    }
+    if (apiKey.trim()) {
+      localStorage.setItem('jsonbin_api_key', apiKey.trim());
+    }
+    setShowConfigModal(false);
+  };
 
   const handleSaveToCloud = async () => {
     if (!binId) {
-      alert("Please configure a Bin ID in App.tsx first.");
+      alert("Please configure a Bin ID first.");
+      setShowConfigModal(true);
       return;
     }
     if (!apiKey) {
       alert("Please enter your JSONBin API Key (Master Key) to save.");
-      setShowConfigModal(true); // Open modal to enter key
+      setShowConfigModal(true); 
       return;
     }
 
     setIsSaving(true);
     setSaveStatus('idle');
     
-    // Save key for future
+    // Save key just in case it was updated
     localStorage.setItem('jsonbin_api_key', apiKey);
 
     const success = await saveInvitationData(binId, apiKey, data);
@@ -295,16 +309,25 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
                         <li>Go to <a href="https://jsonbin.io" target="_blank" className="underline">jsonbin.io</a> and login.</li>
                         <li>Create a new Bin with the JSON below.</li>
                         <li><strong>Important:</strong> Set Bin to "Public" (Unlock icon) for guests to read it.</li>
-                        <li>Copy the <strong>Bin ID</strong> and paste it into <code>App.tsx</code> (CLOUD_BIN_ID).</li>
-                        <li>Push code to Cloudflare ONE last time.</li>
+                        <li>Copy the <strong>Bin ID</strong> and paste it below.</li>
                       </ul>
+                      <div className="mt-2">
+                        <label className="text-[10px] uppercase font-bold text-blue-600">Your Bin ID</label>
+                        <input 
+                            type="text" 
+                            value={inputBinId}
+                            onChange={(e) => setInputBinId(e.target.value)}
+                            placeholder="e.g. 65f2a..."
+                            className="w-full p-2 rounded border border-blue-200 text-xs font-mono mt-1"
+                        />
+                      </div>
                    </div>
 
                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-sm text-emerald-800">
                       <p className="font-bold mb-1">Step 2: API Key (For Saving)</p>
                       <p className="text-xs mb-2">
                         Get your <strong>Master Key</strong> from JSONBin Dashboard -> API Keys.
-                        Paste it here to enable saving. It will be stored in your browser.
+                        Paste it here to enable saving.
                       </p>
                       <input 
                         type="password" 
@@ -338,13 +361,11 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
                 
                 <div className="mt-6 flex justify-end gap-3">
                    <button onClick={() => setShowConfigModal(false)} className="px-5 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold text-gray-700">
-                     Done
+                     Cancel
                    </button>
-                   {apiKey && binId && (
-                     <button onClick={() => { setShowConfigModal(false); handleSaveToCloud(); }} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-bold text-white shadow-lg">
-                       Save Now
-                     </button>
-                   )}
+                   <button onClick={handleSaveConnection} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-bold text-white shadow-lg">
+                     Save Connection
+                   </button>
                 </div>
              </div>
           </div>
@@ -724,13 +745,13 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
             {/* RSVP Endpoint */}
             <InputGroup label={t.labelRsvpUrl} icon={Link}>
               <div className="text-[10px] text-gray-400 mb-1 leading-tight">
-                {lang === 'zh' ? '在 formspree.io 创建表单，将 URL 填入此处即可接收邮件。' : 'Create form at formspree.io, paste URL here to receive emails.'}
+                {lang === 'zh' ? '支持 Formspree 链接 或 Google Apps Script 发布的 Web App URL。' : 'Supports Formspree URL or Google Apps Script Web App URL.'}
               </div>
               <StyledInput
                 type="text"
                 value={data.rsvpUrl}
                 onChange={(e) => handleSharedChange('rsvpUrl', e.target.value)}
-                placeholder="https://formspree.io/f/..."
+                placeholder="https://script.google.com/..."
                 className="font-mono text-xs text-gray-500"
               />
             </InputGroup>
