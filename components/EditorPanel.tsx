@@ -326,7 +326,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-sm text-emerald-800">
                       <p className="font-bold mb-1">Step 2: API Key (For Saving)</p>
                       <p className="text-xs mb-2">
-                        Get your <strong>Master Key</strong> from JSONBin Dashboard -> API Keys.
+                        Get your <strong>Master Key</strong> from JSONBin Dashboard &rarr; API Keys.
                         Paste it here to enable saving.
                       </p>
                       <input 
