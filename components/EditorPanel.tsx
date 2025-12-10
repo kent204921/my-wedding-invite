@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { InvitationData, Language, LABELS, LocalizedContent, STICKER_ASSETS, FontStyle, FONT_OPTIONS } from '../types';
-import { Sparkles, Image as ImageIcon, Sliders, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, MoveHorizontal, Box, User, Maximize, Layout, Link, Copy, Check, Share2, UploadCloud, Plus, Download, AlertTriangle } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link } from 'lucide-react';
 import { generateStory } from '../services/geminiService';
+import { saveInvitationData } from '../services/storageService';
 
 // --- Components defined OUTSIDE EditorPanel ---
-
 const InputGroup = ({ label, icon: Icon, children }: { label: string, icon?: any, children?: React.ReactNode }) => (
   <div className="space-y-1.5">
     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -37,13 +38,25 @@ interface EditorPanelProps {
   lang: Language;
   selectedId: string | null;
   onSelectElement?: (id: string | null) => void;
+  binId?: string; // New prop for cloud saving
 }
 
-const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selectedId, onSelectElement }) => {
+const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selectedId, onSelectElement, binId }) => {
   const t = LABELS[lang];
   const [isGenerating, setIsGenerating] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [customStickerUrl, setCustomStickerUrl] = useState('');
+
+  // Cloud Saving State
+  const [isSaving, setIsSaving] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // Load API Key from local storage on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem('jsonbin_api_key');
+    if (savedKey) setApiKey(savedKey);
+  }, []);
 
   // Helper functions
   const handleSharedChange = (field: keyof InvitationData, value: any) => {
@@ -117,8 +130,32 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
     }
   };
 
-  const handleGenerateConfig = () => {
-    setShowConfigModal(true);
+  const handleSaveToCloud = async () => {
+    if (!binId) {
+      alert("Please configure a Bin ID in App.tsx first.");
+      return;
+    }
+    if (!apiKey) {
+      alert("Please enter your JSONBin API Key (Master Key) to save.");
+      setShowConfigModal(true); // Open modal to enter key
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveStatus('idle');
+    
+    // Save key for future
+    localStorage.setItem('jsonbin_api_key', apiKey);
+
+    const success = await saveInvitationData(binId, apiKey, data);
+    
+    setIsSaving(false);
+    if (success) {
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } else {
+      setSaveStatus('error');
+    }
   };
   
   const copyToClipboard = () => {
@@ -207,14 +244,32 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
             {t.editorTitle}
           </h2>
           <div className="flex gap-2">
-             <button
-               onClick={handleGenerateConfig}
-               className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md transform hover:scale-105"
-               title="Generate Configuration Code"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {t.btnDetailedExport}
-            </button>
+             {/* Dynamic Save Button */}
+             {binId ? (
+               <button
+                 onClick={handleSaveToCloud}
+                 disabled={isSaving}
+                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white transition-all shadow-md transform hover:scale-105 ${
+                   saveStatus === 'success' ? 'bg-green-500' :
+                   saveStatus === 'error' ? 'bg-red-500' :
+                   'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
+                 }`}
+               >
+                 {isSaving ? <UploadCloud className="w-3.5 h-3.5 animate-bounce" /> : 
+                  saveStatus === 'success' ? <CheckCircle2 className="w-3.5 h-3.5" /> : 
+                  <Save className="w-3.5 h-3.5" />}
+                 {isSaving ? 'Saving...' : saveStatus === 'success' ? 'Saved!' : 'Publish'}
+               </button>
+             ) : (
+               <button
+                 onClick={() => setShowConfigModal(true)}
+                 className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-gray-800 text-white hover:bg-gray-700 transition-all shadow-md"
+               >
+                 <Download className="w-3.5 h-3.5" />
+                 Config
+               </button>
+             )}
+
             <div className="flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100">
               <Globe className="w-3 h-3" />
               {t.currentLangLabel}
@@ -225,78 +280,79 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
         {/* Configuration Modal */}
         {showConfigModal && (
           <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-             <div className="bg-white rounded-2xl max-w-2xl w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+             <div className="bg-white rounded-2xl max-w-xl w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
                 <button onClick={() => setShowConfigModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-2">×</button>
                 
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-blue-100 p-3 rounded-full">
-                    <Check className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Configuration Generated!</h3>
-                    <p className="text-sm text-gray-500">Your design is ready to be saved.</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-6">
-                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                      <h4 className="font-bold text-gray-800 mb-2 text-sm flex items-center gap-2">
-                        <UploadCloud className="w-4 h-4 text-blue-500" />
-                        How to deploy:
-                      </h4>
-                      <ol className="list-decimal ml-5 text-sm text-gray-600 space-y-1.5">
-                        <li>Copy the code block below.</li>
-                        <li>Open the file <code>App.tsx</code> in your code editor.</li>
-                        <li>Find <code>const INITIAL_DATA = ...</code>.</li>
-                        <li>Replace that entire object with the code below.</li>
-                        <li>Commit & Push to Cloudflare.</li>
-                      </ol>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Cloud Storage Setup (JSONBin.io)</h3>
+                <p className="text-sm text-gray-500 mb-6">
+                  To enable "One-click Publish", you need to connect a JSONBin account.
+                </p>
+
+                <div className="space-y-4">
+                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
+                      <p className="font-bold mb-1">Step 1: Get Bin ID</p>
+                      <ul className="list-disc ml-4 space-y-1 text-xs">
+                        <li>Go to <a href="https://jsonbin.io" target="_blank" className="underline">jsonbin.io</a> and login.</li>
+                        <li>Create a new Bin with the JSON below.</li>
+                        <li><strong>Important:</strong> Set Bin to "Public" (Unlock icon) for guests to read it.</li>
+                        <li>Copy the <strong>Bin ID</strong> and paste it into <code>App.tsx</code> (CLOUD_BIN_ID).</li>
+                        <li>Push code to Cloudflare ONE last time.</li>
+                      </ul>
                    </div>
 
-                   <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 text-amber-800 text-xs flex gap-3 items-start leading-relaxed">
-                      <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500" />
-                      <div>
-                        <strong>How to edit after deploying?</strong>
-                        <br/>
-                        For a professional look, the edit button is hidden for guests.
-                        <br/>
-                        To access the editor, simply add <code>?edit=true</code> to your website URL.
-                        <br/>
-                        <span className="opacity-70 mt-1 block">Example: <code>https://your-wedding.com/?edit=true</code></span>
-                      </div>
+                   <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-sm text-emerald-800">
+                      <p className="font-bold mb-1">Step 2: API Key (For Saving)</p>
+                      <p className="text-xs mb-2">
+                        Get your <strong>Master Key</strong> from JSONBin Dashboard -> API Keys.
+                        Paste it here to enable saving. It will be stored in your browser.
+                      </p>
+                      <input 
+                        type="password" 
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder="Paste your JSONBin Master Key (starts with $2...)"
+                        className="w-full p-2 rounded border border-emerald-200 text-xs font-mono"
+                      />
                    </div>
-                   
-                   <div className="relative group">
-                     <div className="absolute top-2 right-2">
+
+                   <div className="mt-4">
+                     <p className="text-xs font-bold text-gray-500 uppercase mb-2">Current Invitation Data (for initial bin creation)</p>
+                     <div className="relative group">
                         <button 
-                          onClick={(e) => {
-                             copyToClipboard();
-                             const btn = e.currentTarget;
-                             btn.innerText = "Copied!";
-                             setTimeout(() => btn.innerText = "Copy Code", 2000);
-                          }}
-                          className="bg-black/80 hover:bg-black text-white text-xs px-3 py-1.5 rounded-md transition-all"
+                            onClick={(e) => {
+                                copyToClipboard();
+                                const btn = e.currentTarget;
+                                btn.innerText = "Copied!";
+                                setTimeout(() => btn.innerText = "Copy JSON", 2000);
+                            }}
+                            className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white text-xs px-2 py-1 rounded transition-all"
                         >
-                          Copy Code
+                            Copy JSON
                         </button>
+                        <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg text-[10px] overflow-auto h-32 font-mono">
+                            {JSON.stringify(data, null, 2)}
+                        </pre>
                      </div>
-                     <pre className="bg-gray-900 text-gray-100 p-4 rounded-xl text-xs overflow-x-auto h-64 font-mono leading-relaxed">
-{JSON.stringify(data, null, 2)}
-                     </pre>
                    </div>
                 </div>
                 
-                <div className="mt-8 flex justify-end gap-3">
-                   <button onClick={() => setShowConfigModal(false)} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold text-gray-700">
-                     Close
+                <div className="mt-6 flex justify-end gap-3">
+                   <button onClick={() => setShowConfigModal(false)} className="px-5 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold text-gray-700">
+                     Done
                    </button>
+                   {apiKey && binId && (
+                     <button onClick={() => { setShowConfigModal(false); handleSaveToCloud(); }} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-bold text-white shadow-lg">
+                       Save Now
+                     </button>
+                   )}
                 </div>
              </div>
           </div>
         )}
 
-        {/* Selected Element Styling */}
+        {/* Selected Element Styling (Existing Code) */}
         <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 transition-all duration-300 shadow-sm sticky top-14 z-10">
+           {/* ... existing styling controls ... */}
            <div className="flex items-center gap-2 mb-3">
              <Edit3 className="w-4 h-4 text-rose-600" />
              <h3 className="text-sm font-bold text-rose-900 uppercase tracking-wide">
@@ -521,7 +577,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
            )}
         </div>
 
-        {/* Standard Form Content */}
+        {/* Standard Form Content (Existing Code) */}
         <div className="space-y-6 opacity-80 hover:opacity-100 transition-opacity">
           
           <InputGroup label={t.labelIntro} icon={Sparkles}>

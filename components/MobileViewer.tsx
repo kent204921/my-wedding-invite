@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { InvitationData, Language, LABELS, FontStyle, resolveAssetUrl } from '../types';
 import { Music, MapPin, Clock, Calendar, ChevronDown, Heart, Send, Sparkles, Quote, Move, Trash2 } from 'lucide-react';
@@ -220,18 +221,29 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
     
-    // If a custom URL (e.g., Formspree) is provided
+    // If a custom URL (e.g., Formspree or Google Apps Script) is provided
     if (data.rsvpUrl && data.rsvpUrl.trim() !== '') {
       try {
-        const response = await fetch(data.rsvpUrl, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Accept': 'application/json'
-          }
-        });
+        const isGoogleScript = data.rsvpUrl.includes('script.google.com');
+        const fetchOptions: RequestInit = {
+            method: 'POST',
+            body: formData,
+        };
+
+        if (isGoogleScript) {
+            // Google Apps Script requires no-cors mode when called from client-side without specific headers
+            // This means the response will be 'opaque' (we can't read it), but it submits successfully.
+            fetchOptions.mode = 'no-cors';
+        } else {
+            // Formspree and others usually expect JSON accept header
+            fetchOptions.headers = { 'Accept': 'application/json' };
+        }
+
+        const response = await fetch(data.rsvpUrl, fetchOptions);
         
-        if (response.ok) {
+        // In no-cors mode (Google), response.ok is always false (opaque). 
+        // We assume success if fetch didn't throw an error.
+        if (isGoogleScript || response.ok) {
           setRsvpSent(true);
         } else {
           setRsvpError(true);

@@ -1,4 +1,5 @@
 
+
 export type Language = 'en' | 'zh';
 
 export type FontStyle = 'serif' | 'sans' | 'handwriting' | 'display';
@@ -157,7 +158,7 @@ export const LABELS: Record<Language, Translations> = {
     labelMusic: "Music Filename",
     labelStickers: "Stickers",
     labelCustomSticker: "Add Custom Sticker (Filename)",
-    labelRsvpUrl: "RSVP Endpoint (Formspree)",
+    labelRsvpUrl: "RSVP URL (Formspree / Google Script)",
     btnDetailedExport: "Generate Config",
     
     styleSection: "Global Settings",
@@ -209,7 +210,7 @@ export const LABELS: Record<Language, Translations> = {
     labelMusic: "音乐文件名",
     labelStickers: "贴纸",
     labelCustomSticker: "添加自定义贴纸 (文件名)",
-    labelRsvpUrl: "回执提交地址 (Formspree)",
+    labelRsvpUrl: "回执提交地址 (Formspree / Google Script)",
     btnDetailedExport: "生成配置代码",
     
     styleSection: "全局设置",
