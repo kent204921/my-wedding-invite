@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { InvitationData, Language, LABELS, LocalizedContent, STICKER_ASSETS, FontStyle, FONT_OPTIONS } from '../types';
-import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2 } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2, FolderOpen } from 'lucide-react';
 import { generateStory } from '../services/geminiService';
 import { saveInvitationData } from '../services/storageService';
 
@@ -47,6 +47,11 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
   const [isGenerating, setIsGenerating] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [customStickerUrl, setCustomStickerUrl] = useState('');
+
+  // Refs for file inputs
+  const musicInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Cloud Saving State
   const [isSaving, setIsSaving] = useState(false);
@@ -187,6 +192,32 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
     navigator.clipboard.writeText(jsonStr);
   };
 
+  // --- File Selection Helper ---
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'music' | 'cover' | 'gallery') => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (type === 'music') {
+      const fileName = files[0].name;
+      handleSharedChange('musicUrl', fileName);
+      alert(`${t.uploadTooltip}\nFile: ${fileName}`);
+    } else if (type === 'cover') {
+      const fileName = files[0].name;
+      handleSharedChange('coverImage', fileName);
+      alert(`${t.uploadTooltip}\nFile: ${fileName}`);
+    } else if (type === 'gallery') {
+      const newFiles = Array.from(files).map(f => f.name);
+      // Append to existing
+      const currentList = data.galleryImages;
+      handleSharedChange('galleryImages', [...currentList, ...newFiles]);
+      alert(`${t.uploadTooltip}\nFiles added: ${newFiles.join(', ')}`);
+    }
+
+    // Reset input so same file can be selected again if needed
+    e.target.value = '';
+  };
+
+
   const isStickerSelected = selectedId?.startsWith('sticker_');
   const isSectionSelected = selectedId?.startsWith('section_');
   const canHaveBoxStyling = selectedId && !isStickerSelected && !isSectionSelected;
@@ -229,6 +260,36 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
            <StyledInput type="date" value={value} onChange={(e) => onChangeHandler(e.target.value)} />
          </div>
        );
+    } else if (key === 'cover_time') {
+      // Explicitly handle time when selected to show editor controls
+      label = t.labelTime;
+      value = data.time;
+      onChangeHandler = (v) => handleSharedChange('time', v);
+      return (
+        <div className="mb-4 space-y-3">
+          <div>
+            <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">{label}</label>
+            <StyledInput type="time" value={value} onChange={(e) => onChangeHandler(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">{t.labelTimeFormat}</label>
+             <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button 
+                  onClick={() => handleSharedChange('timeFormat', '12h')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${data.timeFormat === '12h' ? 'bg-white shadow text-rose-500' : 'text-gray-500'}`}
+                >
+                  12h (AM/PM)
+                </button>
+                <button 
+                  onClick={() => handleSharedChange('timeFormat', '24h')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${data.timeFormat === '24h' ? 'bg-white shadow text-rose-500' : 'text-gray-500'}`}
+                >
+                  24h
+                </button>
+             </div>
+          </div>
+        </div>
+      );
     } else if (key === 'cover_location') {
        label = t.labelLocation;
        value = data.content[lang].location;
@@ -732,38 +793,62 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
            {/* Music & Images */}
           <div className="space-y-4 border-t border-gray-100 pt-6">
             <InputGroup label={t.labelMusic} icon={Music}>
-               <StyledInput
-                type="text"
-                value={data.musicUrl}
-                onChange={(e) => handleSharedChange('musicUrl', e.target.value)}
-                placeholder="e.g. music.mp3"
-                className="font-mono text-xs text-gray-500"
-              />
+               <input type="file" ref={musicInputRef} accept="audio/*" onChange={(e) => handleFileSelect(e, 'music')} className="hidden" />
+               <div className="flex gap-2">
+                 <StyledInput
+                  type="text"
+                  value={data.musicUrl}
+                  onChange={(e) => handleSharedChange('musicUrl', e.target.value)}
+                  placeholder="e.g. music.mp3"
+                  className="font-mono text-xs text-gray-500 flex-1"
+                />
+                <button onClick={() => musicInputRef.current?.click()} className="px-3 bg-gray-100 hover:bg-rose-100 text-gray-600 rounded-lg transition-colors border border-gray-200" title={t.labelSelectFile}>
+                  <FolderOpen className="w-4 h-4" />
+                </button>
+               </div>
+               <p className="text-[10px] text-gray-400 mt-0.5">{t.uploadTooltip}</p>
             </InputGroup>
   
             <InputGroup label={t.labelCover} icon={ImageIcon}>
-              <StyledInput
-                type="text"
-                value={data.coverImage}
-                onChange={(e) => handleSharedChange('coverImage', e.target.value)}
-                 placeholder="e.g. cover.jpg"
-                className="font-mono text-xs text-gray-500"
-              />
+              <input type="file" ref={coverInputRef} accept="image/*" onChange={(e) => handleFileSelect(e, 'cover')} className="hidden" />
+              <div className="flex gap-2">
+                <StyledInput
+                  type="text"
+                  value={data.coverImage}
+                  onChange={(e) => handleSharedChange('coverImage', e.target.value)}
+                  placeholder="e.g. cover.jpg"
+                  className="font-mono text-xs text-gray-500 flex-1"
+                />
+                <button onClick={() => coverInputRef.current?.click()} className="px-3 bg-gray-100 hover:bg-rose-100 text-gray-600 rounded-lg transition-colors border border-gray-200" title={t.labelSelectFile}>
+                   <FolderOpen className="w-4 h-4" />
+                </button>
+              </div>
             </InputGroup>
             
             <InputGroup label={t.labelGallery} icon={ImageIcon}>
+              <input type="file" ref={galleryInputRef} accept="image/*" multiple onChange={(e) => handleFileSelect(e, 'gallery')} className="hidden" />
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[10px] text-gray-400">One filename per line</span>
-                {onSelectElement && (
+                <div className="flex gap-2">
                   <button 
-                    onClick={() => onSelectElement('section_gallery')}
+                    onClick={() => galleryInputRef.current?.click()}
                     className="flex items-center gap-1 bg-gray-100 hover:bg-rose-100 text-gray-600 hover:text-rose-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
-                    title="Change Background Color"
+                    title={t.labelAddImages}
                   >
-                    <Palette className="w-3 h-3" />
-                    BG Color
+                    <Plus className="w-3 h-3" />
+                    {t.labelAddImages}
                   </button>
-                )}
+                  {onSelectElement && (
+                    <button 
+                      onClick={() => onSelectElement('section_gallery')}
+                      className="flex items-center gap-1 bg-gray-100 hover:bg-rose-100 text-gray-600 hover:text-rose-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
+                      title="Change Background Color"
+                    >
+                      <Palette className="w-3 h-3" />
+                      BG Color
+                    </button>
+                  )}
+                </div>
               </div>
               <StyledTextArea
                 value={data.galleryImages.join('\n')}

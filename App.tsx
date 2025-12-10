@@ -26,6 +26,7 @@ const App: React.FC = () => {
     // Shared
     date: new Date().toISOString().split('T')[0],
     time: '17:30',
+    timeFormat: '24h', // Default to 24h
     coverImage: DEFAULT_IMAGES[0],
     galleryImages: DEFAULT_IMAGES,
     musicEnabled: true,
@@ -60,11 +61,13 @@ const App: React.FC = () => {
       'cover_intro_en': { x: 0, y: -150 },
       'cover_names_en': { x: 0, y: -50 },
       'cover_date_en': { x: 0, y: 80 },
-      'cover_location_en': { x: 0, y: 130 },
+      'cover_time_en': { x: 0, y: 110 }, // New position for time
+      'cover_location_en': { x: 0, y: 150 },
       'cover_intro_zh': { x: 0, y: -150 },
       'cover_names_zh': { x: 0, y: -50 },
       'cover_date_zh': { x: 0, y: 80 },
-      'cover_location_zh': { x: 0, y: 130 },
+      'cover_time_zh': { x: 0, y: 110 }, // New position for time
+      'cover_location_zh': { x: 0, y: 150 },
       'story_title_en': { x: 0, y: -120 },
       'story_content_en': { x: 0, y: 20 },
       'story_title_zh': { x: 0, y: -120 },

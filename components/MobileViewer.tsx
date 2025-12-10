@@ -268,6 +268,19 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
       : date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  const formatTimeDisplay = (timeStr: string) => {
+    if (!timeStr) return '';
+    if (data.timeFormat === '24h') return timeStr;
+
+    // 12h Format Logic
+    const [h, m] = timeStr.split(':');
+    let hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12;
+    hour = hour ? hour : 12; // the hour '0' should be '12'
+    return `${hour}:${m} ${ampm}`;
+  };
+
   const getAnimClass = (pageIndex: number, delayClass: string = 'delay-300') => {
     const isActive = activePage === pageIndex;
     return `transition-all duration-1000 ease-out transform ${
@@ -434,12 +447,36 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
                       <p className={`${s.fontClass} tracking-[0.2em] uppercase text-lg border-y border-white/30 py-1 px-4`} style={{ color: s.color === 'text-white' ? undefined : s.color, transform: `scale(${s.scale})` }}>
                         {formatDate(data.date)}
                       </p>
-                      {/* ADDED TIME DISPLAY HERE */}
-                      {data.time && (
-                         <p className={`${s.fontClass} tracking-widest uppercase text-sm mt-1.5 opacity-90`} style={{ color: s.color === 'text-white' ? undefined : s.color, transform: `scale(${s.scale})` }}>
-                           {data.time}
-                         </p>
-                      )}
+                    </div>
+                  );
+               })()}
+             </DraggableElement>
+
+             {/* Draggable Time (STANDALONE NOW) */}
+             <DraggableElement 
+               id={`cover_time_${lang}`} 
+               {...getPos(`cover_time_${lang}`)} 
+               onDrag={handleUpdatePosition}
+               isSelected={selectedId === `cover_time_${lang}`}
+               onSelect={() => onSelect(`cover_time_${lang}`)}
+               className="pointer-events-auto"
+             >
+               {(() => {
+                  const s = getElStyle(`cover_time_${lang}`);
+                  return (
+                    <div 
+                      className="flex flex-col items-center"
+                      style={{ 
+                        backgroundColor: s.background,
+                        padding: `${s.padding}px`,
+                        borderRadius: `${s.borderRadius}px`,
+                        width: s.width ? `${s.width}px` : 'auto',
+                        border: s.borderWidth > 0 && s.background !== 'transparent' ? `${s.borderWidth}px solid ${s.color}` : 'none'
+                      }}
+                    >
+                      <p className={`${s.fontClass} tracking-widest uppercase text-sm opacity-90`} style={{ color: s.color === 'text-white' ? undefined : s.color, transform: `scale(${s.scale})` }}>
+                        {formatTimeDisplay(data.time)}
+                      </p>
                     </div>
                   );
                })()}
@@ -663,7 +700,7 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
                       <Calendar className="w-5 h-5" />
                     </div>
                     <p className={`${getFontClass(style.defaultFontStyle, 'serif')} text-gray-900 font-bold`}>{formatDate(data.date)}</p>
-                    <p className="text-xs text-gray-500">{data.time}</p>
+                    <p className="text-xs text-gray-500">{formatTimeDisplay(data.time)}</p>
                  </div>
                  <div className="w-px h-16 bg-gray-100"></div>
                  <div className="text-center flex-1">

@@ -1,5 +1,4 @@
 
-
 export type Language = 'en' | 'zh';
 
 export type FontStyle = 'serif' | 'sans' | 'handwriting' | 'display';
@@ -54,6 +53,7 @@ export interface InvitationData {
   // Shared Data
   date: string;
   time: string;
+  timeFormat: '12h' | '24h'; // New field for time format preference
   coverImage: string;
   galleryImages: string[];
   musicEnabled: boolean;
@@ -91,6 +91,7 @@ export interface Translations {
   labelBride: string;
   labelDate: string;
   labelTime: string;
+  labelTimeFormat: string; // New label
   labelLocation: string;
   labelAddress: string;
   labelCover: string;
@@ -102,6 +103,11 @@ export interface Translations {
   labelRsvpUrl: string;
   labelCustomSticker: string;
   btnDetailedExport: string;
+  
+  // Helper Labels
+  labelSelectFile: string;
+  labelAddImages: string;
+  uploadTooltip: string;
   
   // Style Labels
   styleSection: string;
@@ -149,6 +155,7 @@ export const LABELS: Record<Language, Translations> = {
     labelBride: "Bride",
     labelDate: "Date",
     labelTime: "Time",
+    labelTimeFormat: "Time Format",
     labelLocation: "Venue",
     labelAddress: "Address",
     labelCover: "Cover Photo Filename",
@@ -160,6 +167,10 @@ export const LABELS: Record<Language, Translations> = {
     labelCustomSticker: "Add Custom Sticker (Filename)",
     labelRsvpUrl: "RSVP URL (Formspree / Google Script)",
     btnDetailedExport: "Generate Config",
+
+    labelSelectFile: "Select File",
+    labelAddImages: "Add Images",
+    uploadTooltip: "Selected filename will be filled. Please ensure you move the actual file to your 'public' folder!",
     
     styleSection: "Global Settings",
     labelTitleScale: "Global Title Size",
@@ -201,6 +212,7 @@ export const LABELS: Record<Language, Translations> = {
     labelBride: "新娘",
     labelDate: "日期",
     labelTime: "时间",
+    labelTimeFormat: "时间格式",
     labelLocation: "场地",
     labelAddress: "地址",
     labelCover: "封面图文件名",
@@ -212,6 +224,10 @@ export const LABELS: Record<Language, Translations> = {
     labelCustomSticker: "添加自定义贴纸 (文件名)",
     labelRsvpUrl: "回执提交地址 (Formspree / Google Script)",
     btnDetailedExport: "生成配置代码",
+
+    labelSelectFile: "选择文件",
+    labelAddImages: "添加图片",
+    uploadTooltip: "系统将自动填入文件名。请务必将对应的文件手动复制到项目的 'public' 文件夹中！",
     
     styleSection: "全局设置",
     labelTitleScale: "全局标题大小",
