@@ -9,6 +9,7 @@ interface MobileViewerProps {
   onUpdate?: (data: InvitationData) => void;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  forceRsvpSuccess?: boolean; // New prop for previewing success state
 }
 
 // Draggable Component Wrapper with Selection
@@ -98,7 +99,7 @@ const DraggableElement: React.FC<{
   );
 };
 
-const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selectedId, onSelect }) => {
+const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selectedId, onSelect, forceRsvpSuccess }) => {
   const t = LABELS[lang];
   const content = data.content[lang];
   const style = data.styles[lang];
@@ -247,6 +248,16 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
   
   const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check for common configuration mistake: User pasted the Spreadsheet URL instead of the Script URL
+    if (data.rsvpUrl && data.rsvpUrl.includes('docs.google.com')) {
+      const msg = lang === 'zh' 
+        ? "配置错误：您填入的是 Google Sheets 的表格链接。\n请使用 Apps Script 发布的 Web App URL (以 script.google.com 开头)。\n请检查配置教程。" 
+        : "Configuration Error: You entered a Google Sheets viewing URL.\nPlease use a deployed Google Apps Script 'Web App URL' (starts with script.google.com).";
+      alert(msg);
+      return;
+    }
+
     setIsSubmitting(true);
     setRsvpError(false);
 
@@ -353,6 +364,8 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
       </div>
     );
   };
+
+  const showSuccessView = rsvpSent || forceRsvpSuccess;
 
   return (
     <div 
@@ -765,11 +778,40 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
            </div>
 
            <div className={`w-full max-w-sm px-10 relative z-10 pointer-events-none ${getAnimClass(4)}`}>
-             {rsvpSent ? (
-               <div className="text-center py-16 border border-white/10 bg-white/5 backdrop-blur-sm rounded-xl pointer-events-auto">
-                  <div className="mb-6 inline-block p-4 rounded-full border border-white/20 bg-green-500/20"><Send className="w-6 h-6 text-green-400" strokeWidth={1} /></div>
-                  <h2 className={`${getFontClass(style.defaultFontStyle, 'serif')} text-2xl mb-2 tracking-wide uppercase`}>{t.rsvpSuccess}</h2>
-               </div>
+             {showSuccessView ? (
+                <>
+                   {/* EDITABLE RSVP Success Message */}
+                   <div className="text-center py-16 border border-white/10 bg-white/5 backdrop-blur-sm rounded-xl pointer-events-auto flex flex-col items-center">
+                        <div className="mb-6 inline-block p-4 rounded-full border border-white/20 bg-green-500/20">
+                            <Send className="w-6 h-6 text-green-400" strokeWidth={1} />
+                        </div>
+                        
+                        <DraggableElement 
+                           id={`rsvp_success_msg_${lang}`} 
+                           {...getPos(`rsvp_success_msg_${lang}`)}
+                           onDrag={handleUpdatePosition}
+                           isSelected={selectedId === `rsvp_success_msg_${lang}`}
+                           onSelect={() => onSelect(`rsvp_success_msg_${lang}`)}
+                           className="pointer-events-auto"
+                        >
+                            {(() => {
+                                const s = getElStyle(`rsvp_success_msg_${lang}`);
+                                return (
+                                <div style={{
+                                    backgroundColor: s.background,
+                                    padding: `${s.padding}px`,
+                                    borderRadius: `${s.borderRadius}px`,
+                                    border: s.borderWidth > 0 && s.background !== 'transparent' ? `${s.borderWidth}px solid ${s.color}` : 'none'
+                                }}>
+                                    <h2 className={`${s.fontClass} tracking-wide uppercase whitespace-pre-wrap text-center`} style={{ fontSize: `${1.5 * s.scale}rem`, color: s.color }}>
+                                        {content.rsvpSuccessMsg || t.rsvpSuccess}
+                                    </h2>
+                                </div>
+                                );
+                            })()}
+                        </DraggableElement>
+                   </div>
+                </>
              ) : (
                <>
                  {/* Draggable RSVP Title & Subtitle */}

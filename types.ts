@@ -1,4 +1,5 @@
 
+
 export type Language = 'en' | 'zh';
 
 export type FontStyle = 'serif' | 'sans' | 'handwriting' | 'display';
@@ -50,6 +51,7 @@ export interface LocalizedContent {
   // New Editable RSVP Fields
   rsvpTitle: string;
   rsvpSubtitle: string;
+  rsvpSuccessMsg: string; // New: Editable success message
 }
 
 export interface InvitationData {
@@ -114,6 +116,8 @@ export interface Translations {
   labelRsvpBg: string; // New
   labelRsvpTitle: string; // New
   labelRsvpSubtitle: string; // New
+  labelRsvpSuccess: string; // New
+  toggleRsvpPreview: string; // New
   
   // Helper Labels
   labelSelectFile: string;
@@ -181,6 +185,8 @@ export const LABELS: Record<Language, Translations> = {
     labelRsvpBg: "RSVP Background",
     labelRsvpTitle: "RSVP Title",
     labelRsvpSubtitle: "RSVP Subtitle",
+    labelRsvpSuccess: "Success Message",
+    toggleRsvpPreview: "Preview Success State",
     btnDetailedExport: "Generate Config",
 
     labelSelectFile: "Select File",
@@ -242,6 +248,8 @@ export const LABELS: Record<Language, Translations> = {
     labelRsvpBg: "回执页背景图",
     labelRsvpTitle: "回执页主标题",
     labelRsvpSubtitle: "回执页副标题",
+    labelRsvpSuccess: "提交成功提示语",
+    toggleRsvpPreview: "预览成功状态",
     btnDetailedExport: "生成配置代码",
 
     labelSelectFile: "选择文件",

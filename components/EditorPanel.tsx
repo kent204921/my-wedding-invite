@@ -1,16 +1,19 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { InvitationData, Language, LABELS, LocalizedContent, STICKER_ASSETS, FontStyle, FONT_OPTIONS } from '../types';
-import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2, FolderOpen, Send, Layout } from 'lucide-react';
-import { generateStory } from '../services/geminiService';
-import { saveInvitationData } from '../services/storageService';
+import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2, FolderOpen, Send, Layout, HelpCircle, Copy, ExternalLink, Eye } from 'lucide-react';
+import { generateStory, saveInvitationData } from '../services';
 
 // --- Components defined OUTSIDE EditorPanel ---
-const InputGroup = ({ label, icon: Icon, children }: { label: string, icon?: any, children?: React.ReactNode }) => (
+const InputGroup = ({ label, icon: Icon, children, extraAction }: { label: string, icon?: any, children?: React.ReactNode, extraAction?: React.ReactNode }) => (
   <div className="space-y-1.5">
-    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-      {Icon && <Icon className="w-3 h-3 text-rose-400" />}
-      {label}
-    </label>
+    <div className="flex justify-between items-center">
+        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+        {Icon && <Icon className="w-3 h-3 text-rose-400" />}
+        {label}
+        </label>
+        {extraAction}
+    </div>
     {children}
   </div>
 );
@@ -39,12 +42,15 @@ interface EditorPanelProps {
   onSelectElement?: (id: string | null) => void;
   binId: string | null;
   onBinIdChange: (id: string) => void;
+  previewRsvpSuccess: boolean;
+  onTogglePreviewRsvpSuccess: (val: boolean) => void;
 }
 
-const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selectedId, onSelectElement, binId, onBinIdChange }) => {
+const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selectedId, onSelectElement, binId, onBinIdChange, previewRsvpSuccess, onTogglePreviewRsvpSuccess }) => {
   const t = LABELS[lang];
   const [isGenerating, setIsGenerating] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showRsvpHelp, setShowRsvpHelp] = useState(false);
   const [customStickerUrl, setCustomStickerUrl] = useState('');
 
   // Refs for file inputs
@@ -152,9 +158,9 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
   };
 
   const handleDisconnect = () => {
-    if (window.confirm("Are you sure you want to disconnect? This will clear the Bin ID from this browser.")) {
+    if (window.confirm("Are you sure? This will clear the Bin ID from this browser.")) {
         localStorage.removeItem('jsonbin_bin_id');
-        onBinIdChange(''); // Propagate clear to App
+        onBinIdChange(''); 
         setInputBinId('');
         setShowConfigModal(false);
     }
@@ -162,7 +168,6 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
 
   const handlePublishClick = async () => {
     if (!binId) {
-      // If not connected, show config to connect first
       setShowConfigModal(true);
       return;
     }
@@ -174,8 +179,6 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
 
     setIsSaving(true);
     setSaveStatus('idle');
-    
-    // Save key just in case it was updated
     localStorage.setItem('jsonbin_api_key', apiKey);
 
     const success = await saveInvitationData(binId, apiKey, data);
@@ -189,16 +192,18 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
     }
   };
   
-  const copyToClipboard = () => {
-    const jsonStr = JSON.stringify(data, null, 2);
-    navigator.clipboard.writeText(jsonStr);
+  const copyToClipboard = (text: string, btn: HTMLButtonElement | null) => {
+    navigator.clipboard.writeText(text);
+    if (btn) {
+        const original = btn.innerText;
+        btn.innerText = "Copied!";
+        setTimeout(() => btn.innerText = original, 2000);
+    }
   };
 
-  // --- File Selection Helper ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'music' | 'cover' | 'gallery' | 'sticker' | 'storyBg' | 'rsvpBg') => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     const file = files[0];
     const fileName = file.name;
 
@@ -216,16 +221,12 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
         alert(`${t.uploadTooltip}\nFile: ${fileName}`);
     } else if (type === 'gallery') {
       const newFiles = Array.from(files).map((f: File) => f.name);
-      // Append to existing
-      const currentList = data.galleryImages;
-      handleSharedChange('galleryImages', [...currentList, ...newFiles]);
+      handleSharedChange('galleryImages', [...data.galleryImages, ...newFiles]);
       alert(`${t.uploadTooltip}\nFiles added: ${newFiles.join(', ')}`);
     } else if (type === 'sticker') {
       handleAddSticker(fileName);
       alert(`${t.uploadTooltip}\nAdded: ${fileName}`);
     }
-
-    // Reset input so same file can be selected again if needed
     e.target.value = '';
   };
 
@@ -262,75 +263,39 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
            </div>
          </div>
        );
-    } else if (key === 'cover_date') {
-       label = t.labelDate;
-       value = data.date;
-       onChangeHandler = (v) => handleSharedChange('date', v);
-       return (
-         <div className="mb-4">
-           <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">{label}</label>
-           <StyledInput type="date" value={value} onChange={(e) => onChangeHandler(e.target.value)} />
-         </div>
-       );
-    } else if (key === 'cover_time') {
-      label = t.labelTime;
-      value = data.time;
-      onChangeHandler = (v) => handleSharedChange('time', v);
-      return (
-        <div className="mb-4 space-y-3">
-          <div>
-            <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">{label}</label>
-            <StyledInput type="time" value={value} onChange={(e) => onChangeHandler(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">{t.labelTimeFormat}</label>
-             <div className="flex bg-gray-100 p-1 rounded-lg">
-                <button 
-                  onClick={() => handleSharedChange('timeFormat', '12h')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${data.timeFormat === '12h' ? 'bg-white shadow text-rose-500' : 'text-gray-500'}`}
-                >
-                  12h
-                </button>
-                <button 
-                  onClick={() => handleSharedChange('timeFormat', '24h')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${data.timeFormat === '24h' ? 'bg-white shadow text-rose-500' : 'text-gray-500'}`}
-                >
-                  24h
-                </button>
-             </div>
-          </div>
-        </div>
-      );
-    } else if (key === 'cover_location') {
-       label = t.labelLocation;
-       value = data.content[lang].location;
-       onChangeHandler = (v) => handleContentChange('location', v);
     } else if (key === 'story_title') {
-       label = t.labelStoryTitle;
-       value = data.content[lang].storyTitle;
-       onChangeHandler = (v) => handleContentChange('storyTitle', v);
+      label = t.labelStoryTitle;
+      value = data.content[lang].storyTitle;
+      onChangeHandler = (v) => handleContentChange('storyTitle', v);
     } else if (key === 'story_content') {
-       label = t.labelStory;
-       value = data.content[lang].storyContent;
-       onChangeHandler = (v) => handleContentChange('storyContent', v);
-       isTextArea = true;
+      label = t.labelStory;
+      value = data.content[lang].storyContent;
+      onChangeHandler = (v) => handleContentChange('storyContent', v);
+      isTextArea = true;
     } else if (key === 'rsvp_title') {
-        label = t.labelRsvpTitle;
-        value = data.content[lang].rsvpTitle;
-        onChangeHandler = (v) => handleContentChange('rsvpTitle', v);
+      label = t.labelRsvpTitle;
+      value = data.content[lang].rsvpTitle;
+      onChangeHandler = (v) => handleContentChange('rsvpTitle', v);
     } else if (key === 'rsvp_subtitle') {
-        label = t.labelRsvpSubtitle;
-        value = data.content[lang].rsvpSubtitle;
-        onChangeHandler = (v) => handleContentChange('rsvpSubtitle', v);
-    } else {
-      return null;
+      label = t.labelRsvpSubtitle;
+      value = data.content[lang].rsvpSubtitle;
+      onChangeHandler = (v) => handleContentChange('rsvpSubtitle', v);
+    } else if (key === 'rsvp_success_msg') {
+        label = t.labelRsvpSuccess;
+        value = data.content[lang].rsvpSuccessMsg || t.rsvpSuccess;
+        onChangeHandler = (v) => handleContentChange('rsvpSuccessMsg', v);
+        isTextArea = true;
     }
 
+    if (!label) return null;
+
     return (
-      <div className="mb-4">
-        <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">{label}</label>
+      <div className="mb-4 p-3 bg-white rounded-lg border border-rose-100">
+        <label className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1">
+            <Edit3 className="w-3 h-3" /> {t.selectedLabel} {label}
+        </label>
         {isTextArea ? (
-          <StyledTextArea value={value} onChange={(e) => onChangeHandler(e.target.value)} rows={4} />
+          <StyledTextArea value={value} onChange={(e) => onChangeHandler(e.target.value)} rows={3} />
         ) : (
           <StyledInput value={value} onChange={(e) => onChangeHandler(e.target.value)} />
         )}
@@ -339,613 +304,500 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
   };
 
   return (
-    <div className="bg-white h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
-      <div className="p-6 space-y-8">
+    <div className="flex flex-col h-full bg-white relative">
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-5 pb-32 space-y-8 scrollbar-hide">
         
-        {/* Header */}
-        <div className="flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md py-2 z-10 border-b border-gray-100 -mx-6 px-6">
-          <h2 className={`text-xl font-bold text-gray-800 ${lang === 'zh' ? 'font-serif-cn' : 'font-serif-en'}`}>
-            {t.editorTitle}
-          </h2>
-          <div className="flex gap-2">
-               <button
-                 onClick={handlePublishClick}
-                 disabled={isSaving}
-                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white transition-all shadow-md transform hover:scale-105 ${
-                   saveStatus === 'success' ? 'bg-green-500' :
-                   saveStatus === 'error' ? 'bg-red-500' :
-                   'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
-                 }`}
-               >
-                 {isSaving ? <UploadCloud className="w-3.5 h-3.5 animate-bounce" /> : 
-                  saveStatus === 'success' ? <CheckCircle2 className="w-3.5 h-3.5" /> : 
-                  <Save className="w-3.5 h-3.5" />}
-                 {isSaving ? 'Saving...' : saveStatus === 'success' ? 'Saved!' : 'Publish'}
-               </button>
-               
-               <button
-                 onClick={() => setShowConfigModal(true)}
-                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
-                     binId ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'
-                 }`}
-               >
-                 <Settings className="w-3.5 h-3.5" />
-                 Config
-               </button>
-
-            <div className="flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100">
-              <Globe className="w-3 h-3" />
-              {t.currentLangLabel}
-            </div>
-          </div>
+        {/* HEADER */}
+        <div>
+          <h2 className="text-xl font-bold text-gray-800 mb-1">{t.editorTitle}</h2>
+          <p className="text-sm text-gray-500">{t.currentLangLabel}</p>
         </div>
 
-        {/* Configuration Modal */}
-        {showConfigModal && (
-          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-             <div className="bg-white rounded-2xl max-w-xl w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-                <button onClick={() => setShowConfigModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-2">×</button>
-                
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Cloud Storage Setup (JSONBin.io)</h3>
-                <p className="text-sm text-gray-500 mb-6">
-                  To enable "One-click Publish", you need to connect a JSONBin account.
-                </p>
-
-                <div className="space-y-4">
-                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
-                      <p className="font-bold mb-1">Step 1: Get Bin ID</p>
-                      <ul className="list-disc ml-4 space-y-1 text-xs">
-                        <li>Go to <a href="https://jsonbin.io" target="_blank" className="underline">jsonbin.io</a> and login.</li>
-                        <li>Create a new Bin with the JSON below.</li>
-                        <li><strong>Important:</strong> Set Bin to "Public" (Unlock icon) for guests to read it.</li>
-                        <li>Copy the <strong>Bin ID</strong> and paste it below.</li>
-                      </ul>
-                      <div className="mt-2">
-                        <label className="text-[10px] uppercase font-bold text-blue-600">Your Bin ID</label>
-                        <input 
-                            type="text" 
-                            value={inputBinId}
-                            onChange={(e) => setInputBinId(e.target.value)}
-                            placeholder="e.g. 65f2a..."
-                            className="w-full p-2 rounded border border-blue-200 text-xs font-mono mt-1"
-                        />
-                      </div>
-                   </div>
-
-                   <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-sm text-emerald-800">
-                      <p className="font-bold mb-1">Step 2: API Key (For Saving)</p>
-                      <p className="text-xs mb-2">
-                        Get your <strong>Master Key</strong> from JSONBin Dashboard &rarr; API Keys.
-                        Paste it here to enable saving.
-                      </p>
-                      <input 
-                        type="password" 
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Paste your JSONBin Master Key (starts with $2...)"
-                        className="w-full p-2 rounded border border-emerald-200 text-xs font-mono"
-                      />
-                   </div>
-
-                   <div className="mt-4">
-                     <p className="text-xs font-bold text-gray-500 uppercase mb-2">Current Invitation Data (for initial bin creation)</p>
-                     <div className="relative group">
-                        <button 
-                            onClick={(e) => {
-                                copyToClipboard();
-                                const btn = e.currentTarget;
-                                btn.innerText = "Copied!";
-                                setTimeout(() => btn.innerText = "Copy JSON", 2000);
-                            }}
-                            className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white text-xs px-2 py-1 rounded transition-all"
-                        >
-                            Copy JSON
-                        </button>
-                        <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg text-[10px] overflow-auto h-32 font-mono">
-                            {JSON.stringify(data, null, 2)}
-                        </pre>
-                     </div>
-                   </div>
-                </div>
-                
-                <div className="mt-6 flex justify-end gap-3 items-center">
-                   {binId && (
-                       <button 
-                            onClick={handleDisconnect}
-                            className="mr-auto px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-1"
-                            title="Disconnect stored Bin ID"
-                       >
-                            <Trash2 className="w-4 h-4" />
-                            Disconnect
-                       </button>
-                   )}
-                   <button onClick={() => setShowConfigModal(false)} className="px-5 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold text-gray-700">
-                     Cancel
-                   </button>
-                   <button onClick={handleSaveConnection} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-bold text-white shadow-lg">
-                     Save Connection
-                   </button>
-                </div>
+        {/* --- DYNAMIC STYLE EDITOR (Context Aware) --- */}
+        {selectedId ? (
+          <div className="animate-fade-in space-y-4">
+             <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-rose-500" />
+                    Element Style
+                </h3>
+                <button 
+                    onClick={() => onSelectElement && onSelectElement(null)} 
+                    className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                    Close
+                </button>
              </div>
+             
+             {/* Content Editor if Applicable */}
+             {renderContentEditor()}
+
+             <div className="grid grid-cols-2 gap-3">
+               {/* Font Family (Not for stickers/sections) */}
+               {!isStickerSelected && !isSectionSelected && (
+                 <div className="col-span-2 space-y-1">
+                   <label className="text-[10px] text-gray-400 uppercase font-bold">{t.labelFont}</label>
+                   <div className="grid grid-cols-2 gap-2">
+                     {(['serif', 'sans', 'handwriting', 'display'] as FontStyle[]).map(f => (
+                       <button
+                         key={f}
+                         onClick={() => handleElementStyleChange('font', f)}
+                         className={`px-2 py-1.5 rounded-md text-xs border text-left truncate transition-colors ${
+                           (getElementStyle('font', data.styles[lang].defaultFontStyle) === f) 
+                           ? 'bg-rose-50 border-rose-300 text-rose-700 font-bold' 
+                           : 'border-gray-100 hover:border-gray-200 text-gray-600'
+                         }`}
+                       >
+                         {FONT_OPTIONS[lang][f].split('(')[0]}
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+               {/* Color Picker */}
+               {!isStickerSelected && (
+                 <div className="space-y-1">
+                    <label className="text-[10px] text-gray-400 uppercase font-bold">{t.labelColor}</label>
+                    <div className="flex items-center gap-2 border border-gray-200 p-1.5 rounded-lg bg-gray-50/50">
+                        <input 
+                            type="color" 
+                            value={getElementStyle('color', data.styles[lang].primaryColor)}
+                            onChange={(e) => handleElementStyleChange('color', e.target.value)}
+                            className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                        />
+                        <span className="text-xs text-gray-500 font-mono uppercase">{getElementStyle('color', data.styles[lang].primaryColor)}</span>
+                    </div>
+                 </div>
+               )}
+
+               {/* Scale Slider */}
+               <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase font-bold">Size / Scale</label>
+                  <input 
+                    type="range" min="0.5" max="3" step="0.1"
+                    value={getElementStyle('scale', isStickerSelected ? 1 : 1)}
+                    onChange={(e) => handleElementStyleChange('scale', parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                  />
+               </div>
+
+               {/* Background Color & Opacity (For Box Elements) */}
+               {canHaveBoxStyling && (
+                  <>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 uppercase font-bold">Bg Color</label>
+                        <div className="flex items-center gap-2 border border-gray-200 p-1.5 rounded-lg bg-gray-50/50">
+                            <input 
+                                type="color" 
+                                value={getElementStyle('backgroundColor', '#ffffff')}
+                                onChange={(e) => handleElementStyleChange('backgroundColor', e.target.value)}
+                                className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 uppercase font-bold">Bg Opacity</label>
+                        <input 
+                            type="range" min="0" max="100" step="5"
+                            value={getElementStyle('bgOpacity', 0)}
+                            onChange={(e) => handleElementStyleChange('bgOpacity', parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                    </div>
+                    
+                    {/* Padding & Corner Radius */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 uppercase font-bold">Padding</label>
+                        <input 
+                            type="range" min="0" max="50" step="2"
+                            value={getElementStyle('padding', 0)}
+                            onChange={(e) => handleElementStyleChange('padding', parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 uppercase font-bold">Roundness</label>
+                        <input 
+                            type="range" min="0" max="50" step="2"
+                            value={getElementStyle('borderRadius', 0)}
+                            onChange={(e) => handleElementStyleChange('borderRadius', parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 uppercase font-bold">Border Width</label>
+                        <input 
+                            type="range" min="0" max="10" step="1"
+                            value={getElementStyle('borderWidth', 0)}
+                            onChange={(e) => handleElementStyleChange('borderWidth', parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                    </div>
+                    
+                    {/* Fixed Width Control */}
+                    <div className="space-y-1 col-span-2">
+                        <label className="text-[10px] text-gray-400 uppercase font-bold flex justify-between">
+                            <span>Width constraint</span>
+                            <span className="text-gray-400 font-normal">{getElementStyle('width', 0) === 0 ? 'Auto' : getElementStyle('width', 0) + 'px'}</span>
+                        </label>
+                        <input 
+                            type="range" min="0" max="350" step="10"
+                            value={getElementStyle('width', 0)}
+                            onChange={(e) => handleElementStyleChange('width', parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                        <div className="text-[9px] text-gray-400 text-right">0 = Auto Fit</div>
+                    </div>
+                  </>
+               )}
+             </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center text-gray-400 text-sm mb-6">
+             <Type className="w-8 h-8 mx-auto mb-2 opacity-50" />
+             <p>{t.noSelection}</p>
+             <p className="text-xs mt-1 opacity-70">{t.selectionTip}</p>
           </div>
         )}
 
-        {/* Styling Panel (Sticky) */}
-        <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 transition-all duration-300 shadow-sm sticky top-14 z-10">
-           {/* Header */}
-           <div className="flex items-center gap-2 mb-3">
-             <Edit3 className="w-4 h-4 text-rose-600" />
-             <h3 className="text-sm font-bold text-rose-900 uppercase tracking-wide">
-               {selectedId ? (isSectionSelected ? "Section Styling" : t.selectedLabel) : "Text Styling"}
-             </h3>
-             {selectedId && <span className="text-xs text-rose-500 font-mono ml-auto bg-white px-2 py-0.5 rounded border border-rose-200">
-                {isStickerSelected ? 'Sticker' : (isSectionSelected ? 'Section' : 'Text')}
-             </span>}
-           </div>
-           
-           {!selectedId ? (
-             <p className="text-xs text-rose-400 italic flex items-center gap-2">
-               <Type className="w-3 h-3" />
-               {t.noSelection}
-             </p>
-           ) : (
-             <div className="space-y-4 animate-fade-in">
-                {renderContentEditor()}
-                
-                {isSectionSelected && (
-                  <div className="mb-4">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Background Color</label>
-                     <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200">
-                       <input
-                          type="color"
-                          value={getElementStyle('backgroundColor', '#ffffff')}
-                          onChange={(e) => handleElementStyleChange('backgroundColor', e.target.value)}
-                          className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-                       />
-                       <span className="text-xs font-mono text-gray-500">{getElementStyle('backgroundColor', '#ffffff')}</span>
-                     </div>
-                  </div>
-                )}
-                
-                <div className="border-t border-rose-200/50 my-3"></div>
+        <hr className="border-gray-100" />
 
-                {/* Typography Controls */}
-                {!isStickerSelected && !isSectionSelected && (
-                  <>
-                    <div className="flex items-center gap-2 mb-2">
-                       <Type className="w-3 h-3 text-rose-400" />
-                       <span className="text-[10px] font-bold text-gray-400 uppercase">Typography ({t.currentLangLabel})</span>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        {(Object.keys(FONT_OPTIONS[lang]) as FontStyle[]).map((fontKey) => (
-                          <button
-                            key={fontKey}
-                            onClick={() => handleElementStyleChange('font', fontKey)}
-                            className={`px-2 py-2 text-xs rounded-lg transition-all border text-left ${
-                              getElementStyle('font', data.styles[lang].defaultFontStyle) === fontKey 
-                                ? 'bg-rose-500 text-white border-rose-600 shadow-md' 
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <span className="block font-bold">{FONT_OPTIONS[lang][fontKey]}</span>
-                            <span className="text-[9px] opacity-70">Abc</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                       <div>
-                          <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Text Color</label>
-                          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200">
-                            <input
-                               type="color"
-                               value={getElementStyle('color', data.styles[lang].primaryColor)}
-                               onChange={(e) => handleElementStyleChange('color', e.target.value)}
-                               className="w-6 h-6 rounded border border-gray-200 cursor-pointer"
-                            />
-                            <span className="text-xs font-mono text-gray-500">{getElementStyle('color', data.styles[lang].primaryColor)}</span>
-                          </div>
-                       </div>
-                       <div>
-                          <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Text Scale</label>
-                          <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                             <input
-                               type="range"
-                               min="0.5"
-                               max="3.0"
-                               step="0.1"
-                               value={getElementStyle('scale', 1)}
-                               onChange={(e) => handleElementStyleChange('scale', parseFloat(e.target.value))}
-                               className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
-                             />
-                          </div>
-                       </div>
-                    </div>
-                  </>
-                )}
-                
-                {/* Sticker Controls */}
-                {isStickerSelected && (
-                   <div className="mb-4">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Sticker Size</label>
-                      <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                         <input
-                           type="range"
-                           min="0.5"
-                           max="3.0"
-                           step="0.1"
-                           value={getElementStyle('scale', 1)}
-                           onChange={(e) => handleElementStyleChange('scale', parseFloat(e.target.value))}
-                           className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
-                         />
-                      </div>
-                   </div>
-                )}
-
-                {/* Box/Container Styling */}
-                {canHaveBoxStyling && (
-                  <div className="pt-2 border-t border-rose-200/50">
-                     <div className="flex items-center gap-2 mb-2">
-                       <Box className="w-3 h-3 text-rose-400" />
-                       <span className="text-[10px] font-bold text-gray-400 uppercase">Box Styling</span>
-                     </div>
-
-                     <div className="grid grid-cols-2 gap-3 mb-3">
-                         <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Bg Color</label>
-                            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200">
-                              <input
-                                 type="color"
-                                 value={getElementStyle('backgroundColor', '#ffffff')}
-                                 onChange={(e) => handleElementStyleChange('backgroundColor', e.target.value)}
-                                 className="w-6 h-6 rounded border border-gray-200 cursor-pointer"
-                              />
-                              <span className="text-xs font-mono text-gray-500">
-                                {getElementStyle('bgOpacity', 0) === 0 ? 'None' : 'Set'}
-                              </span>
-                            </div>
-                         </div>
-                         <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Opacity %</label>
-                            <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                               <input
-                                 type="range"
-                                 min="0"
-                                 max="100"
-                                 step="5"
-                                 value={getElementStyle('bgOpacity', 0)}
-                                 onChange={(e) => handleElementStyleChange('bgOpacity', parseInt(e.target.value))}
-                                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                               />
-                            </div>
-                         </div>
-                     </div>
-                     
-                     <div className="space-y-3">
-                       <div>
-                          <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 flex items-center justify-between">
-                            <span>Box Width (px)</span>
-                            <span className="text-rose-400 text-[10px] font-normal">{getElementStyle('width', 0) === 0 ? 'Auto' : getElementStyle('width', 0)}</span>
-                          </label>
-                          <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                             <input
-                               type="range"
-                               min="0"
-                               max="380"
-                               step="10"
-                               value={getElementStyle('width', 0)}
-                               onChange={(e) => handleElementStyleChange('width', parseInt(e.target.value))}
-                               className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                             />
-                          </div>
-                       </div>
-                       
-                       <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Padding</label>
-                            <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                               <input
-                                 type="range"
-                                 min="0"
-                                 max="40"
-                                 step="2"
-                                 value={getElementStyle('padding', 0)}
-                                 onChange={(e) => handleElementStyleChange('padding', parseInt(e.target.value))}
-                                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                               />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Radius</label>
-                            <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                               <input
-                                 type="range"
-                                 min="0"
-                                 max="50"
-                                 step="2"
-                                 value={getElementStyle('borderRadius', 0)}
-                                 onChange={(e) => handleElementStyleChange('borderRadius', parseInt(e.target.value))}
-                                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                               />
-                            </div>
-                          </div>
-                       </div>
-
-                       <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 block">Border Width</label>
-                            <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center h-[42px]">
-                               <input
-                                 type="range"
-                                 min="0"
-                                 max="10"
-                                 step="0.5"
-                                 value={getElementStyle('borderWidth', 0)}
-                                 onChange={(e) => handleElementStyleChange('borderWidth', parseFloat(e.target.value))}
-                                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                               />
-                            </div>
-                       </div>
-                     </div>
-                  </div>
-                )}
-             </div>
-           )}
-        </div>
-
-        {/* Standard Form Content - REORGANIZED */}
-        <div className="space-y-8 opacity-90 hover:opacity-100 transition-opacity">
-          
-          {/* SECTION 1: Page Backgrounds (Centralized) */}
-          <div className="space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-             <div className="flex items-center gap-2 mb-2">
-               <Layout className="w-4 h-4 text-rose-500" />
-               <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Page Backgrounds</h3>
-             </div>
-             
-             {/* Cover Image */}
-             <InputGroup label={t.labelCover} icon={ImageIcon}>
-              <input type="file" ref={coverInputRef} accept="image/*" onChange={(e) => handleFileSelect(e, 'cover')} className="hidden" />
-              <div className="flex gap-2">
-                <StyledInput
-                  type="text"
-                  value={data.coverImage}
-                  onChange={(e) => handleSharedChange('coverImage', e.target.value)}
-                  placeholder="e.g. cover.jpg"
-                  className="font-mono text-xs text-gray-500 flex-1"
-                />
-                <button onClick={() => coverInputRef.current?.click()} className="px-3 bg-white hover:bg-rose-100 text-gray-600 rounded-lg transition-colors border border-gray-200" title={t.labelSelectFile}>
-                   <FolderOpen className="w-4 h-4" />
-                </button>
-              </div>
-            </InputGroup>
-
-            {/* Story BG */}
-            <InputGroup label={t.labelStoryBg} icon={ImageIcon}>
-                <input type="file" ref={storyBgInputRef} accept="image/*" onChange={(e) => handleFileSelect(e, 'storyBg')} className="hidden" />
-                <div className="flex gap-2">
-                    <StyledInput
-                    type="text"
-                    value={data.storyBackgroundImage}
-                    onChange={(e) => handleSharedChange('storyBackgroundImage', e.target.value)}
-                    placeholder={lang === 'zh' ? '默认为相册第一张' : 'Defaults to Gallery 1st'}
-                    className="font-mono text-xs text-gray-500 flex-1"
-                    />
-                    <button onClick={() => storyBgInputRef.current?.click()} className="px-3 bg-white hover:bg-rose-100 text-gray-600 rounded-lg transition-colors border border-gray-200">
-                    <FolderOpen className="w-4 h-4" />
-                    </button>
-                </div>
-            </InputGroup>
-
-            {/* RSVP BG */}
-            <InputGroup label={t.labelRsvpBg} icon={ImageIcon}>
-               <input type="file" ref={rsvpBgInputRef} accept="image/*" onChange={(e) => handleFileSelect(e, 'rsvpBg')} className="hidden" />
-               <div className="flex gap-2">
-                 <StyledInput
-                  type="text"
-                  value={data.rsvpBackgroundImage}
-                  onChange={(e) => handleSharedChange('rsvpBackgroundImage', e.target.value)}
-                  placeholder={lang === 'zh' ? '默认为星空背景' : 'Defaults to Starry Night'}
-                  className="font-mono text-xs text-gray-500 flex-1"
-                />
-                <button onClick={() => rsvpBgInputRef.current?.click()} className="px-3 bg-white hover:bg-rose-100 text-gray-600 rounded-lg transition-colors border border-gray-200">
-                  <FolderOpen className="w-4 h-4" />
-                </button>
-               </div>
-            </InputGroup>
-          </div>
-
-          {/* SECTION 2: Media (Music & Gallery) */}
-          <div className="space-y-4 pt-4 border-t border-gray-100">
-            <InputGroup label={t.labelMusic} icon={Music}>
-               <input type="file" ref={musicInputRef} accept="audio/*" onChange={(e) => handleFileSelect(e, 'music')} className="hidden" />
-               <div className="flex gap-2">
-                 <StyledInput
-                  type="text"
-                  value={data.musicUrl}
-                  onChange={(e) => handleSharedChange('musicUrl', e.target.value)}
-                  placeholder="e.g. music.mp3"
-                  className="font-mono text-xs text-gray-500 flex-1"
-                />
-                <button onClick={() => musicInputRef.current?.click()} className="px-3 bg-gray-100 hover:bg-rose-100 text-gray-600 rounded-lg transition-colors border border-gray-200" title={t.labelSelectFile}>
-                  <FolderOpen className="w-4 h-4" />
-                </button>
-               </div>
-            </InputGroup>
-            
-            <InputGroup label={t.labelGallery} icon={ImageIcon}>
-              <input type="file" ref={galleryInputRef} accept="image/*" multiple onChange={(e) => handleFileSelect(e, 'gallery')} className="hidden" />
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[10px] text-gray-400">One filename per line</span>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => galleryInputRef.current?.click()}
-                    className="flex items-center gap-1 bg-gray-100 hover:bg-rose-100 text-gray-600 hover:text-rose-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
-                    title={t.labelAddImages}
-                  >
-                    <Plus className="w-3 h-3" />
-                    {t.labelAddImages}
-                  </button>
-                  {onSelectElement && (
-                    <button 
-                      onClick={() => onSelectElement('section_gallery')}
-                      className="flex items-center gap-1 bg-gray-100 hover:bg-rose-100 text-gray-600 hover:text-rose-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
-                      title="Change Background Color"
-                    >
-                      <Palette className="w-3 h-3" />
-                      BG Color
-                    </button>
-                  )}
-                </div>
-              </div>
-              <StyledTextArea
-                value={data.galleryImages.join('\n')}
-                onChange={(e) => handleGalleryChange(e.target.value)}
-                rows={4}
-                placeholder="e.g. photo1.jpg"
-                className="font-mono text-xs text-gray-500 whitespace-nowrap overflow-x-auto"
-              />
-            </InputGroup>
-          </div>
-
-          {/* SECTION 3: Content Editing */}
-          <div className="pt-4 border-t border-gray-100">
-              <InputGroup label={t.labelIntro} icon={Sparkles}>
-                <StyledInput
-                value={data.content[lang].intro}
-                onChange={(e) => handleContentChange('intro', e.target.value)}
-                className={selectedId === `cover_intro_${lang}` ? 'border-rose-400 ring-2 ring-rose-100 bg-white' : 'border-gray-200 bg-gray-50/50'}
-                />
-              </InputGroup>
-          </div>
-
-          {/* Sticker Selector */}
-          <div className="pt-2">
-             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-3">
-               <StickerIcon className="w-3 h-3 inline mr-1 text-rose-400" /> {t.labelStickers}
-             </label>
-             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide mb-3">
-               {STICKER_ASSETS.map((sticker, idx) => (
-                 <button 
-                  key={idx}
-                  onClick={() => handleAddSticker(sticker.url)}
-                  className="flex-shrink-0 w-14 h-14 bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-rose-400 hover:bg-rose-50 flex items-center justify-center transition-all hover:scale-105 group"
-                  title={sticker.name}
-                 >
-                   <img src={sticker.url} alt={sticker.name} className="w-8 h-8 object-contain group-hover:rotate-12 transition-transform" />
-                 </button>
-               ))}
-             </div>
-             
-             {/* Custom Sticker Input */}
-             <div className="flex items-center gap-2">
-               <div className="flex-1">
-                 <StyledInput 
-                   placeholder={lang === 'zh' ? '输入文件名 e.g. sticker.png' : 'Enter filename e.g. sticker.png'}
-                   value={customStickerUrl}
-                   onChange={(e) => setCustomStickerUrl(e.target.value)}
-                   className="py-2 text-xs font-mono"
-                 />
-               </div>
-               <input type="file" ref={stickerInputRef} accept="image/*" onChange={(e) => handleFileSelect(e, 'sticker')} className="hidden" />
-               <button 
-                 onClick={() => stickerInputRef.current?.click()}
-                 className="bg-gray-100 hover:bg-rose-100 text-gray-600 hover:text-rose-600 rounded-xl p-2.5 transition-colors border border-gray-200"
-                 title="Upload Custom Sticker"
-               >
-                 <FolderOpen className="w-4 h-4" />
-               </button>
-               <button 
-                 onClick={() => handleAddSticker(customStickerUrl)}
-                 disabled={!customStickerUrl}
-                 className="bg-gray-100 hover:bg-rose-100 text-gray-600 hover:text-rose-600 rounded-xl p-2.5 transition-colors disabled:opacity-50 border border-gray-200"
-                 title="Add Custom Sticker"
-               >
-                 <Plus className="w-4 h-4" />
-               </button>
-             </div>
-          </div>
-
-          {/* Story Text Section */}
-          <div className={`space-y-4 bg-rose-50/50 p-4 rounded-2xl border border-rose-100 transition-all ${selectedId?.includes('story') ? 'ring-2 ring-rose-400 bg-rose-50' : ''}`}>
-             <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Heart className="w-3 h-3" />
-                  {t.labelStory} (Text)
-                </label>
-                <button
-                  onClick={handleAiStory}
-                  disabled={isGenerating}
-                  className="text-xs flex items-center gap-1.5 text-white bg-rose-400 hover:bg-rose-500 px-3 py-1.5 rounded-lg transition-all shadow-sm disabled:opacity-50"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  {isGenerating ? '...' : t.btnGenerateStory}
-                </button>
-             </div>
-             
-             <StyledInput
-                type="text"
-                value={data.content[lang].storyTitle}
-                onChange={(e) => handleContentChange('storyTitle', e.target.value)}
-                placeholder={t.labelStoryTitle}
-                className="bg-white border-rose-100 focus:border-rose-300"
-              />
-             <StyledTextArea
-                value={data.content[lang].storyContent}
-                onChange={(e) => handleContentChange('storyContent', e.target.value)}
-                rows={6}
-                className="bg-white border-rose-100 focus:border-rose-300"
-             />
-          </div>
-          
-           {/* Date & Location */}
-           <div className="space-y-4 pt-4 border-t border-gray-100">
-             <div className="grid grid-cols-2 gap-4">
-               <InputGroup label={t.labelDate} icon={Calendar}>
-                <StyledInput type="date" value={data.date} onChange={(e) => handleSharedChange('date', e.target.value)} />
-               </InputGroup>
-               <InputGroup label={t.labelTime} icon={Calendar}>
+        {/* --- GLOBAL SECTIONS --- */}
+        
+        {/* 1. Basic Info */}
+        <section className="space-y-4">
+          <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+            <Settings className="w-3 h-3" /> Basic Info
+          </h3>
+          <InputGroup label={t.labelDate} icon={Calendar}>
+             <StyledInput type="date" value={data.date} onChange={(e) => handleSharedChange('date', e.target.value)} />
+          </InputGroup>
+          <div className="grid grid-cols-2 gap-3">
+             <InputGroup label={t.labelTime}>
                 <StyledInput type="time" value={data.time} onChange={(e) => handleSharedChange('time', e.target.value)} />
-               </InputGroup>
+             </InputGroup>
+             <InputGroup label={t.labelTimeFormat}>
+                <select 
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-rose-100 outline-none text-sm"
+                  value={data.timeFormat} 
+                  onChange={(e) => handleSharedChange('timeFormat', e.target.value)}
+                >
+                  <option value="24h">24 Hour (17:30)</option>
+                  <option value="12h">12 Hour (5:30 PM)</option>
+                </select>
+             </InputGroup>
+          </div>
+          <InputGroup label={t.labelLocation} icon={MapPin}>
+             <StyledInput value={data.content[lang].location} onChange={(e) => handleContentChange('location', e.target.value)} />
+          </InputGroup>
+          <InputGroup label={t.labelAddress}>
+             <StyledTextArea rows={2} value={data.content[lang].address} onChange={(e) => handleContentChange('address', e.target.value)} />
+          </InputGroup>
+        </section>
+
+        {/* 2. Media Assets */}
+        <section className="space-y-4">
+          <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+            <ImageIcon className="w-3 h-3" /> Media & Assets
+          </h3>
+          
+          <InputGroup label={t.labelCover}>
+             <div className="flex gap-2">
+                <StyledInput value={data.coverImage} onChange={(e) => handleSharedChange('coverImage', e.target.value)} placeholder="image.jpg or URL" />
+                <button onClick={() => coverInputRef.current?.click()} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><FolderOpen className="w-4 h-4" /></button>
+                <input ref={coverInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'cover')} />
              </div>
-             <InputGroup label={t.labelLocation} icon={MapPin}>
-              <StyledInput value={data.content[lang].location} onChange={(e) => handleContentChange('location', e.target.value)} />
-             </InputGroup>
-             <InputGroup label={t.labelAddress} icon={MapPin}>
-              <StyledInput value={data.content[lang].address} onChange={(e) => handleContentChange('address', e.target.value)} />
-             </InputGroup>
+          </InputGroup>
+
+          <InputGroup label={t.labelStoryBg}>
+             <div className="flex gap-2">
+                <StyledInput value={data.storyBackgroundImage || ''} onChange={(e) => handleSharedChange('storyBackgroundImage', e.target.value)} placeholder="Optional: Story BG" />
+                <button onClick={() => storyBgInputRef.current?.click()} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><FolderOpen className="w-4 h-4" /></button>
+                <input ref={storyBgInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'storyBg')} />
+             </div>
+          </InputGroup>
+
+          <InputGroup label={t.labelGallery} icon={ImageIcon}>
+             <StyledTextArea 
+                rows={4} 
+                value={data.galleryImages.join('\n')} 
+                onChange={(e) => handleGalleryChange(e.target.value)} 
+                placeholder="One URL per line..."
+                className="font-mono text-xs"
+             />
+             <div className="flex justify-end mt-1">
+               <button onClick={() => galleryInputRef.current?.click()} className="text-xs flex items-center gap-1 text-rose-500 hover:text-rose-600 font-medium">
+                 <Plus className="w-3 h-3" /> {t.labelAddImages}
+               </button>
+               <input ref={galleryInputRef} type="file" className="hidden" multiple accept="image/*" onChange={(e) => handleFileSelect(e, 'gallery')} />
+             </div>
+          </InputGroup>
+
+          <InputGroup label={t.labelMusic} icon={Music}>
+             <div className="flex gap-2">
+               <StyledInput value={data.musicUrl} onChange={(e) => handleSharedChange('musicUrl', e.target.value)} />
+               <button onClick={() => musicInputRef.current?.click()} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><FolderOpen className="w-4 h-4" /></button>
+               <input ref={musicInputRef} type="file" className="hidden" accept="audio/*" onChange={(e) => handleFileSelect(e, 'music')} />
+             </div>
+             <div className="flex items-center gap-2 mt-2">
+                <input type="checkbox" id="musicEnabled" checked={data.musicEnabled} onChange={(e) => handleSharedChange('musicEnabled', e.target.checked)} className="rounded text-rose-500 focus:ring-rose-500" />
+                <label htmlFor="musicEnabled" className="text-sm text-gray-600">Auto-play Music</label>
+             </div>
+          </InputGroup>
+        </section>
+
+        {/* 3. Story & AI */}
+        <section className="space-y-4">
+           <div className="flex justify-between items-center">
+             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2"><Sparkles className="w-3 h-3" /> Love Story</h3>
+             <button 
+                onClick={handleAiStory} 
+                disabled={isGenerating}
+                className="text-[10px] bg-gradient-to-r from-rose-400 to-orange-400 text-white px-2 py-1 rounded-full flex items-center gap-1 hover:shadow-md transition-all disabled:opacity-50"
+             >
+                {isGenerating ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Sparkles className="w-3 h-3" />}
+                {t.btnGenerateStory}
+             </button>
+           </div>
+           {/* Note: Actual Story Text is edited via selection now to support styling */}
+           <p className="text-xs text-gray-400 italic">Click the story text in the preview to edit content & style.</p>
+        </section>
+
+        {/* 4. Stickers */}
+        <section className="space-y-4">
+          <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+            <StickerIcon className="w-3 h-3" /> {t.labelStickers}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {STICKER_ASSETS.map((s, i) => (
+              <button key={i} onClick={() => handleAddSticker(s.url)} className="w-10 h-10 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center justify-center p-1 transition-transform hover:scale-110" title={s.name}>
+                <img src={s.url} alt={s.name} className="w-full h-full object-contain" />
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+             <StyledInput 
+               placeholder="Custom Sticker URL..." 
+               value={customStickerUrl} 
+               onChange={(e) => setCustomStickerUrl(e.target.value)} 
+             />
+             <button onClick={() => stickerInputRef.current?.click()} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><FolderOpen className="w-4 h-4" /></button>
+             <input ref={stickerInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'sticker')} />
+             <button onClick={() => handleAddSticker(customStickerUrl)} className="bg-gray-800 text-white px-3 rounded-lg text-xs font-medium hover:bg-black">Add</button>
+          </div>
+        </section>
+
+        {/* 5. RSVP Config */}
+        <section className="space-y-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+           <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+             <Send className="w-3 h-3" /> RSVP Configuration
+           </h3>
+           
+           {/* RSVP Background Image */}
+           <InputGroup label={t.labelRsvpBg}>
+             <div className="flex gap-2">
+                <StyledInput value={data.rsvpBackgroundImage || ''} onChange={(e) => handleSharedChange('rsvpBackgroundImage', e.target.value)} placeholder="Optional: RSVP BG" />
+                <button onClick={() => rsvpBgInputRef.current?.click()} className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600"><FolderOpen className="w-4 h-4" /></button>
+                <input ref={rsvpBgInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'rsvpBg')} />
+             </div>
+           </InputGroup>
+
+           {/* Toggle Preview Success State */}
+           <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-200">
+              <span className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                 <Eye className="w-3 h-3 text-rose-500" />
+                 {t.toggleRsvpPreview}
+              </span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={previewRsvpSuccess} 
+                  onChange={(e) => onTogglePreviewRsvpSuccess(e.target.checked)} 
+                  className="sr-only peer" 
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+              </label>
            </div>
            
-          {/* RSVP Text Fields */}
-          <div className="space-y-4 border-t border-gray-100 pt-6">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Send className="w-3 h-3 text-rose-400" />
-                RSVP Page Text
-            </h3>
-            
-            <InputGroup label={t.labelRsvpTitle}>
-              <StyledInput value={data.content[lang].rsvpTitle} onChange={(e) => handleContentChange('rsvpTitle', e.target.value)} />
-            </InputGroup>
-
-            <InputGroup label={t.labelRsvpSubtitle}>
-              <StyledInput value={data.content[lang].rsvpSubtitle} onChange={(e) => handleContentChange('rsvpSubtitle', e.target.value)} />
-            </InputGroup>
-
-            <InputGroup label={t.labelRsvpUrl} icon={Link}>
-              <StyledInput
-                type="text"
-                value={data.rsvpUrl}
-                onChange={(e) => handleSharedChange('rsvpUrl', e.target.value)}
+           <InputGroup 
+             label={t.labelRsvpUrl} 
+             extraAction={<button onClick={() => setShowRsvpHelp(true)} className="text-[10px] text-rose-500 flex items-center gap-1 hover:underline"><HelpCircle className="w-3 h-3" /> Setup Guide</button>}
+           >
+              <StyledTextArea 
+                value={data.rsvpUrl} 
+                onChange={(e) => handleSharedChange('rsvpUrl', e.target.value)} 
                 placeholder="https://script.google.com/..."
-                className="font-mono text-xs text-gray-500"
+                rows={2}
+                className="font-mono text-xs break-all"
               />
-            </InputGroup>
-          </div>
-        </div>
+           </InputGroup>
+        </section>
 
       </div>
+
+      {/* FOOTER ACTIONS */}
+      <div className="absolute bottom-0 left-0 w-full bg-white border-t border-gray-200 p-4 flex flex-col gap-3 shadow-lg z-20">
+         <div className="flex gap-2">
+            <button 
+                onClick={handlePublishClick}
+                disabled={isSaving}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-white transition-all shadow-md ${saveStatus === 'success' ? 'bg-green-500' : saveStatus === 'error' ? 'bg-red-500' : 'bg-rose-500 hover:bg-rose-600'}`}
+            >
+                {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/> : saveStatus === 'success' ? <CheckCircle2 className="w-4 h-4"/> : <UploadCloud className="w-4 h-4" />}
+                {saveStatus === 'success' ? 'Saved!' : saveStatus === 'error' ? 'Failed' : 'Save to Cloud'}
+            </button>
+            <button 
+                onClick={() => setShowConfigModal(true)}
+                className={`p-3 rounded-xl border transition-colors ${binId ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'}`}
+                title="Cloud Settings"
+            >
+                <Settings className="w-5 h-5" />
+            </button>
+         </div>
+      </div>
+
+      {/* CONFIG MODAL */}
+      {showConfigModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-fade-up">
+                <div className="bg-rose-50 p-4 border-b border-rose-100 flex justify-between items-center">
+                    <h3 className="font-bold text-rose-800 flex items-center gap-2"><UploadCloud className="w-5 h-5"/> Cloud Storage (JSONBin)</h3>
+                    <button onClick={() => setShowConfigModal(false)} className="text-rose-400 hover:text-rose-600">&times;</button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        To save and share your invitation across devices, you need a free <b>JSONBin.io</b> account.
+                    </p>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Master API Key</label>
+                            <input 
+                                type="password" 
+                                value={apiKey} 
+                                onChange={(e) => setApiKey(e.target.value)} 
+                                className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                                placeholder="X-Master-Key from API Keys"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bin ID (Optional)</label>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={inputBinId} 
+                                    onChange={(e) => setInputBinId(e.target.value)} 
+                                    className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                                    placeholder="Leave empty to create new"
+                                />
+                                {binId && (
+                                    <button onClick={handleDisconnect} className="px-3 py-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-lg text-sm">
+                                        Disconnect
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-1">If you have an existing Bin ID, paste it here to edit that specific invitation.</p>
+                        </div>
+                    </div>
+                    <div className="pt-2">
+                        <button onClick={handleSaveConnection} className="w-full py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-black transition-colors">
+                            Confirm Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* RSVP HELP MODAL */}
+      {showRsvpHelp && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-fade-up max-h-[90vh] flex flex-col">
+              <div className="bg-gray-50 p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
+                  <h3 className="font-bold text-gray-800 flex items-center gap-2"><HelpCircle className="w-5 h-5 text-rose-500"/> Google Sheets RSVP Setup Guide</h3>
+                  <button onClick={() => setShowRsvpHelp(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold px-2">&times;</button>
+              </div>
+              <div className="p-6 overflow-y-auto space-y-6 text-sm text-gray-700">
+                  
+                  {/* Step 1 */}
+                  <div className="flex gap-4">
+                     <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">1</div>
+                     <div className="space-y-2">
+                        <h4 className="font-bold text-base">Create Sheet</h4>
+                        <p>Go to <a href="https://sheets.new" target="_blank" className="text-blue-600 underline">Google Sheets</a> and create a blank sheet.</p>
+                     </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex gap-4">
+                     <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">2</div>
+                     <div className="space-y-2">
+                        <h4 className="font-bold text-base">Open Script Editor</h4>
+                        <p>Click <b>Extensions</b> &gt; <b>Apps Script</b> in the top menu.</p>
+                     </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex gap-4">
+                     <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">3</div>
+                     <div className="space-y-2 w-full">
+                        <h4 className="font-bold text-base">Paste Code</h4>
+                        <p>Delete existing code and paste this:</p>
+                        <div className="relative group">
+                           <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg text-xs overflow-x-auto font-mono">
+{`function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var params = e.parameter;
+  sheet.appendRow([new Date(), params.name, params.guests, params.status]);
+  return ContentService.createTextOutput(JSON.stringify({"result":"success"})).setMimeType(ContentService.MimeType.JSON);
+}`}
+                           </pre>
+                           <button 
+                             onClick={(e) => copyToClipboard(`function doPost(e) {\n  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();\n  var params = e.parameter;\n  sheet.appendRow([new Date(), params.name, params.guests, params.status]);\n  return ContentService.createTextOutput(JSON.stringify({"result":"success"})).setMimeType(ContentService.MimeType.JSON);\n}`, e.currentTarget)}
+                             className="absolute top-2 right-2 p-1.5 bg-white/20 hover:bg-white/40 rounded text-white text-xs"
+                           >
+                              <Copy className="w-3 h-3" />
+                           </button>
+                        </div>
+                        <p className="text-xs text-gray-500">Click Save (Floppy Disk Icon).</p>
+                     </div>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="flex gap-4">
+                     <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">4</div>
+                     <div className="space-y-2">
+                        <h4 className="font-bold text-base">Deploy (Critical!)</h4>
+                        <ul className="list-disc pl-4 space-y-1">
+                           <li>Click <b>Deploy</b> &gt; <b>New deployment</b>.</li>
+                           <li>Select type: <b>Web app</b>.</li>
+                           <li>Execute as: <b>Me</b>.</li>
+                           <li>Who has access: <b className="text-red-600">Anyone</b> (Must select this!).</li>
+                           <li>Click Deploy &gt; Authorize Access &gt; Copy URL.</li>
+                        </ul>
+                     </div>
+                  </div>
+
+                  {/* Step 5 */}
+                  <div className="flex gap-4">
+                     <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">5</div>
+                     <div className="space-y-2">
+                        <h4 className="font-bold text-base">Paste URL</h4>
+                        <p>Paste the <code>script.google.com</code> URL into the input field below.</p>
+                     </div>
+                  </div>
+
+              </div>
+              <div className="p-4 bg-gray-50 border-t border-gray-100 text-center shrink-0">
+                  <button onClick={() => setShowRsvpHelp(false)} className="px-6 py-2 bg-rose-500 text-white rounded-lg font-bold hover:bg-rose-600 transition-colors">
+                      Got it!
+                  </button>
+              </div>
+           </div>
+        </div>
+      )}
+
     </div>
   );
 };
