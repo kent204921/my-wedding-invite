@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { InvitationData, Language, LABELS, LocalizedContent, STICKER_ASSETS, FontStyle, FONT_OPTIONS } from '../types';
-import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2, FolderOpen, Send, Layout, HelpCircle, Copy, ExternalLink, Eye } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Globe, Type, MapPin, Calendar, Heart, Palette, Music, Sticker as StickerIcon, Edit3, Box, UploadCloud, Plus, Download, Save, CheckCircle2, AlertCircle, Link, Settings, Trash2, FolderOpen, Send, Layout, HelpCircle, Copy, ExternalLink, Eye, X } from 'lucide-react';
 import { generateStory, saveInvitationData } from '../services';
 
 // --- Components defined OUTSIDE EditorPanel ---
@@ -536,11 +536,29 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ data, onChange, lang, selecte
           </InputGroup>
 
           <InputGroup label={t.labelMusic} icon={Music}>
-             <div className="flex gap-2">
-               <StyledInput value={data.musicUrl} onChange={(e) => handleSharedChange('musicUrl', e.target.value)} />
+             <div className="flex gap-2 relative group">
+               <StyledInput 
+                 value={data.musicUrl} 
+                 onChange={(e) => handleSharedChange('musicUrl', e.target.value)} 
+                 placeholder="Select .mp3 or paste URL"
+               />
+               
+               {/* Clear Button */}
+               {data.musicUrl && (
+                  <button 
+                    onClick={() => handleSharedChange('musicUrl', '')}
+                    className="absolute right-12 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+               )}
+
                <button onClick={() => musicInputRef.current?.click()} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><FolderOpen className="w-4 h-4" /></button>
                <input ref={musicInputRef} type="file" className="hidden" accept="audio/*" onChange={(e) => handleFileSelect(e, 'music')} />
              </div>
+             <p className="text-[10px] text-gray-400 mt-1 pl-1">
+               Tip: Filenames with Chinese/Symbols will be auto-encoded.
+             </p>
              <div className="flex items-center gap-2 mt-2">
                 <input type="checkbox" id="musicEnabled" checked={data.musicEnabled} onChange={(e) => handleSharedChange('musicEnabled', e.target.checked)} className="rounded text-rose-500 focus:ring-rose-500" />
                 <label htmlFor="musicEnabled" className="text-sm text-gray-600">Auto-play Music</label>

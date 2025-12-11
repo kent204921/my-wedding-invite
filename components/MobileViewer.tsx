@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { InvitationData, Language, LABELS, FontStyle, resolveAssetUrl } from '../types';
-import { Music, MapPin, Clock, Calendar, ChevronDown, Heart, Send, Sparkles, Quote, Move, Trash2 } from 'lucide-react';
+import { Music, MapPin, Clock, Calendar, ChevronDown, Heart, Send, Sparkles, Quote, Move, Trash2, AlertCircle } from 'lucide-react';
 
 interface MobileViewerProps {
   data: InvitationData;
@@ -149,33 +149,45 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audioError, setAudioError] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // --- AUDIO LOGIC ---
+  
+  // Reset error when URL changes
+  useEffect(() => {
+    setAudioError(false);
+    setIsPlaying(false);
+  }, [data.musicUrl]);
+
   useEffect(() => {
     const audio = audioRef.current;
-    if (data.musicEnabled && audio) {
+    if (data.musicEnabled && audio && !audioError) {
        // Try initial play
        const attemptPlay = async () => {
          try {
            await audio.play();
            setIsPlaying(true);
+           setAudioError(false);
          } catch (e) {
-           console.log("Autoplay blocked by browser. Waiting for interaction.");
+           console.log("Autoplay blocked by browser or source invalid. Waiting for interaction.");
            setIsPlaying(false);
          }
        };
        attemptPlay();
     }
-  }, [data.musicEnabled, data.musicUrl]);
+  }, [data.musicEnabled, data.musicUrl, audioError]);
 
   // Global "Unlock Audio" Listener (Runs once on first click/touch)
   useEffect(() => {
     const unlockAudio = () => {
       const audio = audioRef.current;
-      if (audio && data.musicEnabled && audio.paused) {
+      if (audio && data.musicEnabled && audio.paused && !audioError) {
         audio.play()
-          .then(() => setIsPlaying(true))
+          .then(() => {
+             setIsPlaying(true);
+             setAudioError(false);
+          })
           .catch(e => console.error("Play on interaction failed", e));
       }
     };
@@ -188,14 +200,22 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
       document.removeEventListener('click', unlockAudio);
       document.removeEventListener('touchstart', unlockAudio);
     };
-  }, [data.musicEnabled]);
+  }, [data.musicEnabled, audioError]);
 
   const toggleMusic = () => {
     if (audioRef.current) {
+        if (audioError) {
+            alert(`Music Load Failed.\nURL: ${resolveAssetUrl(data.musicUrl)}\n\nPlease ensure the URL is a direct link (e.g. from GitHub Raw) or the file exists in your 'public' folder.`);
+            return;
+        }
+
       if (isPlaying) {
         audioRef.current.pause();
       } else {
-        audioRef.current.play();
+        audioRef.current.play().catch(e => {
+            console.error(e);
+            setAudioError(true);
+        });
       }
       setIsPlaying(!isPlaying);
     }
@@ -373,15 +393,31 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
       onClick={() => onSelect(null)} 
       onContextMenu={(e) => e.preventDefault()} // Disable Right Click Menu
     >
-      <audio ref={audioRef} src={resolveAssetUrl(data.musicUrl)} loop />
+      <audio 
+        ref={audioRef} 
+        src={resolveAssetUrl(data.musicUrl)} 
+        loop 
+        onError={(e) => {
+            console.error("Audio playback error. Check the URL.", e);
+            // If it fails, mark as not playing to stop the spinner
+            setIsPlaying(false);
+            setAudioError(true);
+        }}
+      />
 
       {data.musicEnabled && (
         <button 
           onClick={(e) => { e.stopPropagation(); toggleMusic(); }}
-          className={`absolute top-6 right-6 z-50 w-8 h-8 flex items-center justify-center transition-all duration-700 ease-in-out ${isPlaying ? 'animate-spin-slow' : 'opacity-40 animate-pulse'}`}
-          title="Play Music"
+          className={`absolute top-6 right-6 z-50 w-8 h-8 flex items-center justify-center transition-all duration-700 ease-in-out ${
+             audioError 
+               ? 'bg-red-100 text-red-500 animate-pulse shadow-md rounded-full' 
+               : isPlaying 
+                  ? 'animate-spin-slow text-gray-800' 
+                  : 'opacity-40 animate-pulse text-gray-800'
+          }`}
+          title={audioError ? "Music Failed to Load (Click for details)" : "Play Music"}
         >
-          <Music className={`w-5 h-5 ${activePage === 0 ? 'text-white' : 'text-gray-800'}`} strokeWidth={1.5} />
+          {audioError ? <AlertCircle className="w-5 h-5" /> : <Music className={`w-5 h-5 ${activePage === 0 ? 'text-white' : ''}`} strokeWidth={1.5} />}
         </button>
       )}
 

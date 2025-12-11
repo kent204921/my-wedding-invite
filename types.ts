@@ -325,9 +325,26 @@ export const STICKER_ASSETS = [
  */
 export const resolveAssetUrl = (url: string) => {
   if (!url) return '';
-  if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) {
-    return url;
+  
+  let finalUrl = url.trim();
+
+  // Fix common GitHub raw file issue
+  if (finalUrl.includes('github.com') && finalUrl.includes('/blob/')) {
+    finalUrl = finalUrl.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
   }
-  // Ensure it has a leading slash for local files
-  return url.startsWith('/') ? url : `/${url}`;
+
+  // If it's a full URL, return as is
+  if (finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:')) {
+    return finalUrl;
+  }
+  
+  // Handle local files (relative paths)
+  // Remove leading slash for cleaner processing
+  const cleanPath = finalUrl.startsWith('/') ? finalUrl.slice(1) : finalUrl;
+  
+  // Encode URI components to handle Chinese characters (e.g., "歌名.mp3" -> "%E6%AD%8C%E5%90%8D.mp3")
+  // We split by '/' to ensure we encode filenames but not the path separators
+  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+  
+  return `/${encodedPath}`;
 };
