@@ -150,11 +150,44 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  // --- AUDIO LOGIC ---
   useEffect(() => {
-    if (data.musicEnabled && audioRef.current) {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    const audio = audioRef.current;
+    if (data.musicEnabled && audio) {
+       // Try initial play
+       const attemptPlay = async () => {
+         try {
+           await audio.play();
+           setIsPlaying(true);
+         } catch (e) {
+           console.log("Autoplay blocked by browser. Waiting for interaction.");
+           setIsPlaying(false);
+         }
+       };
+       attemptPlay();
     }
   }, [data.musicEnabled, data.musicUrl]);
+
+  // Global "Unlock Audio" Listener (Runs once on first click/touch)
+  useEffect(() => {
+    const unlockAudio = () => {
+      const audio = audioRef.current;
+      if (audio && data.musicEnabled && audio.paused) {
+        audio.play()
+          .then(() => setIsPlaying(true))
+          .catch(e => console.error("Play on interaction failed", e));
+      }
+    };
+
+    // Add listeners to document to catch any interaction
+    document.addEventListener('click', unlockAudio, { once: true });
+    document.addEventListener('touchstart', unlockAudio, { once: true });
+
+    return () => {
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
+  }, [data.musicEnabled]);
 
   const toggleMusic = () => {
     if (audioRef.current) {
@@ -332,7 +365,8 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
       {data.musicEnabled && (
         <button 
           onClick={(e) => { e.stopPropagation(); toggleMusic(); }}
-          className={`absolute top-6 right-6 z-50 w-8 h-8 flex items-center justify-center transition-all duration-700 ease-in-out ${isPlaying ? 'animate-spin-slow' : 'opacity-40'}`}
+          className={`absolute top-6 right-6 z-50 w-8 h-8 flex items-center justify-center transition-all duration-700 ease-in-out ${isPlaying ? 'animate-spin-slow' : 'opacity-40 animate-pulse'}`}
+          title="Play Music"
         >
           <Music className={`w-5 h-5 ${activePage === 0 ? 'text-white' : 'text-gray-800'}`} strokeWidth={1.5} />
         </button>
@@ -524,7 +558,8 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
         <section className="w-full h-full snap-start relative flex flex-col bg-[#FDFCF8] overflow-hidden" style={{ padding: 0 }}>
            {/* Background */}
            <div className="absolute inset-0 z-0">
-             <img src={resolveAssetUrl(data.galleryImages[0] || data.coverImage)} className="w-full h-full object-cover" alt="Story BG" />
+             {/* Use storyBackgroundImage if present, otherwise fallback to gallery[0] */}
+             <img src={resolveAssetUrl(data.storyBackgroundImage || data.galleryImages[0] || data.coverImage)} className="w-full h-full object-cover" alt="Story BG" />
              {/* Warm Overlay + Gradient */}
              <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-white/50 to-rose-100/60 backdrop-blur-[1px]"></div>
            </div>
@@ -719,20 +754,81 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
 
         {/* PAGE 5: RSVP */}
         <section className="w-full h-full snap-start relative flex flex-col justify-center items-center bg-[#1a1a1a] text-white overflow-hidden">
-           <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
-           <div className={`w-full max-w-sm px-10 relative z-10 ${getAnimClass(4)}`}>
+           {/* RSVP Background */}
+           <div className="absolute inset-0 z-0">
+             {data.rsvpBackgroundImage ? (
+                <img src={resolveAssetUrl(data.rsvpBackgroundImage)} className="w-full h-full object-cover" alt="RSVP BG" />
+             ) : (
+                <div className="w-full h-full bg-[#1a1a1a] bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>
+             )}
+             <div className="absolute inset-0 bg-black/20"></div>
+           </div>
+
+           <div className={`w-full max-w-sm px-10 relative z-10 pointer-events-none ${getAnimClass(4)}`}>
              {rsvpSent ? (
-               <div className="text-center py-16 border border-white/10 bg-white/5 backdrop-blur-sm rounded-xl">
+               <div className="text-center py-16 border border-white/10 bg-white/5 backdrop-blur-sm rounded-xl pointer-events-auto">
                   <div className="mb-6 inline-block p-4 rounded-full border border-white/20 bg-green-500/20"><Send className="w-6 h-6 text-green-400" strokeWidth={1} /></div>
                   <h2 className={`${getFontClass(style.defaultFontStyle, 'serif')} text-2xl mb-2 tracking-wide uppercase`}>{t.rsvpSuccess}</h2>
                </div>
              ) : (
                <>
-                 <div className="text-center mb-10">
-                   <h2 className={`${getFontClass(style.defaultFontStyle, 'serif')} text-3xl mb-1 text-white`}>{t.rsvpTitle}</h2>
-                   <p className="text-white/40 tracking-[0.3em] uppercase text-[10px]">{t.saveTheDate}</p>
+                 {/* Draggable RSVP Title & Subtitle */}
+                 <div className="text-center mb-10 h-24 relative pointer-events-none">
+                   
+                   {/* Title */}
+                   <DraggableElement 
+                     id={`rsvp_title_${lang}`} 
+                     {...getPos(`rsvp_title_${lang}`)}
+                     onDrag={handleUpdatePosition}
+                     isSelected={selectedId === `rsvp_title_${lang}`}
+                     onSelect={() => onSelect(`rsvp_title_${lang}`)}
+                     className="pointer-events-auto"
+                   >
+                     {(() => {
+                        const s = getElStyle(`rsvp_title_${lang}`);
+                        return (
+                           <div style={{
+                             backgroundColor: s.background,
+                             padding: `${s.padding}px`,
+                             borderRadius: `${s.borderRadius}px`,
+                             border: s.borderWidth > 0 && s.background !== 'transparent' ? `${s.borderWidth}px solid ${s.color}` : 'none'
+                           }}>
+                              <h2 className={`${s.fontClass} mb-1 whitespace-nowrap`} style={{ fontSize: `${2.25 * s.scale}rem`, color: s.color }}>
+                                 {content.rsvpTitle || t.rsvpTitle}
+                              </h2>
+                           </div>
+                        );
+                     })()}
+                   </DraggableElement>
+
+                   {/* Subtitle */}
+                   <DraggableElement 
+                     id={`rsvp_subtitle_${lang}`} 
+                     {...getPos(`rsvp_subtitle_${lang}`)}
+                     onDrag={handleUpdatePosition}
+                     isSelected={selectedId === `rsvp_subtitle_${lang}`}
+                     onSelect={() => onSelect(`rsvp_subtitle_${lang}`)}
+                     className="pointer-events-auto"
+                   >
+                     {(() => {
+                        const s = getElStyle(`rsvp_subtitle_${lang}`);
+                        return (
+                           <div style={{
+                             backgroundColor: s.background,
+                             padding: `${s.padding}px`,
+                             borderRadius: `${s.borderRadius}px`,
+                             border: s.borderWidth > 0 && s.background !== 'transparent' ? `${s.borderWidth}px solid ${s.color}` : 'none'
+                           }}>
+                              <p className="tracking-[0.3em] uppercase text-[10px] whitespace-nowrap" style={{ color: s.color, transform: `scale(${s.scale})` }}>
+                                 {content.rsvpSubtitle || t.saveTheDate}
+                              </p>
+                           </div>
+                        );
+                     })()}
+                   </DraggableElement>
                  </div>
-                 <form onSubmit={handleRsvpSubmit} className="space-y-6">
+
+                 <form onSubmit={handleRsvpSubmit} className="space-y-6 pointer-events-auto">
                     <input required type="text" name="name" placeholder={t.rsvpNamePlaceholder} className="w-full bg-transparent border-b border-white/20 py-3 text-white placeholder-white/30 focus:outline-none focus:border-white/60 transition-colors text-center font-light" style={pStyle} />
                     <input type="number" name="guests" placeholder={t.rsvpGuestsPlaceholder} className="w-full bg-transparent border-b border-white/20 py-3 text-white placeholder-white/30 focus:outline-none focus:border-white/60 transition-colors text-center font-light" style={pStyle} />
                     <div className="relative">

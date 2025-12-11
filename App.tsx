@@ -4,8 +4,10 @@ import { InvitationData, Language, LABELS, DEFAULT_IMAGES } from './types';
 import LanguageToggle from './components/LanguageToggle';
 import EditorPanel from './components/EditorPanel';
 import MobileViewer from './components/MobileViewer';
-import { Smartphone, PenTool, Unlock, Loader2, Cloud, Share2, Link as LinkIcon } from 'lucide-react';
+import { Smartphone, PenTool, Unlock, Loader2, Cloud, Share2, Link as LinkIcon, RotateCcw, Trash2 } from 'lucide-react';
 import { fetchInvitationData } from './services/storageService';
+
+const LOCAL_STORAGE_KEY = 'h5_invitation_draft_v1';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('zh');
@@ -32,6 +34,8 @@ const App: React.FC = () => {
     musicEnabled: true,
     musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', 
     stickers: [], 
+    storyBackgroundImage: '', // New
+    rsvpBackgroundImage: '',  // New
     rsvpUrl: '',
     content: {
       en: {
@@ -42,6 +46,8 @@ const App: React.FC = () => {
         address: '123 Love Avenue, Paris, France',
         storyTitle: 'Our Story',
         storyContent: 'From the moment we met, we knew this was forever. We invite you to join our journey.',
+        rsvpTitle: 'Will You Join Us?',
+        rsvpSubtitle: 'SAVE THE DATE',
       },
       zh: {
         intro: '我们结婚了',
@@ -51,6 +57,8 @@ const App: React.FC = () => {
         address: '北京市朝阳区建国路88号',
         storyTitle: '我们的故事',
         storyContent: '从相识到相知，从相知到相爱。感谢命运让我们相遇，决定携手共度余生。',
+        rsvpTitle: '诚挚邀请您的光临',
+        rsvpSubtitle: '诚挚邀请',
       }
     },
     styles: {
@@ -61,17 +69,21 @@ const App: React.FC = () => {
       'cover_intro_en': { x: 0, y: -150 },
       'cover_names_en': { x: 0, y: -50 },
       'cover_date_en': { x: 0, y: 80 },
-      'cover_time_en': { x: 0, y: 110 }, // New position for time
+      'cover_time_en': { x: 0, y: 110 }, 
       'cover_location_en': { x: 0, y: 150 },
       'cover_intro_zh': { x: 0, y: -150 },
       'cover_names_zh': { x: 0, y: -50 },
       'cover_date_zh': { x: 0, y: 80 },
-      'cover_time_zh': { x: 0, y: 110 }, // New position for time
+      'cover_time_zh': { x: 0, y: 110 },
       'cover_location_zh': { x: 0, y: 150 },
       'story_title_en': { x: 0, y: -120 },
       'story_content_en': { x: 0, y: 20 },
       'story_title_zh': { x: 0, y: -120 },
       'story_content_zh': { x: 0, y: 20 },
+      'rsvp_title_en': { x: 0, y: -120 },
+      'rsvp_subtitle_en': { x: 0, y: -90 },
+      'rsvp_title_zh': { x: 0, y: -120 },
+      'rsvp_subtitle_zh': { x: 0, y: -90 },
     },
     elementStyles: {
       'story_title_en': { backgroundColor: '#fff1f2', bgOpacity: 0, padding: 0, borderRadius: 0, color: '#be123c' },
@@ -79,7 +91,11 @@ const App: React.FC = () => {
       'story_title_zh': { backgroundColor: '#ffffff', bgOpacity: 0, padding: 10, borderRadius: 0, color: '#be123c' },
       'story_content_zh': { backgroundColor: '#fffbfb', bgOpacity: 95, padding: 30, borderRadius: 6, width: 300, color: '#4a0404' },
       'cover_location_zh': { backgroundColor: '#be123c', bgOpacity: 80, padding: 8, borderRadius: 50, color: '#ffffff' },
-      'section_gallery': { backgroundColor: '#ffffff', bgOpacity: 100 }
+      'section_gallery': { backgroundColor: '#ffffff', bgOpacity: 100 },
+      'rsvp_title_zh': { color: '#ffffff', scale: 1 },
+      'rsvp_subtitle_zh': { color: '#ffffff', scale: 1 },
+      'rsvp_title_en': { color: '#ffffff', scale: 1 },
+      'rsvp_subtitle_en': { color: '#ffffff', scale: 1 }
     }
   };
 
@@ -106,7 +122,9 @@ const App: React.FC = () => {
         setMode('edit');
       }
 
-      // 2. Fetch Data
+      // 2. Fetch Data (Priority: Cloud -> LocalStorage Cache -> Initial Defaults)
+      
+      // A. Try Cloud
       if (activeBinId) {
         try {
           const cloudData = await fetchInvitationData(activeBinId);
@@ -117,17 +135,45 @@ const App: React.FC = () => {
             return;
           }
         } catch (e) {
-          console.error("Failed to fetch cloud data, falling back to local defaults", e);
+          console.error("Failed to fetch cloud data", e);
         }
       } 
       
-      // Fallback
+      // B. Try LocalStorage (Only in Editor Mode, not Guest Mode)
+      if (!isGuestMode) {
+        try {
+            const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                console.log("Loaded data from local cache");
+                // Merge with INITIAL_DATA to ensure new fields (like timeFormat) exist if cache is old
+                setData({ ...INITIAL_DATA, ...parsed });
+                setIsLoading(false);
+                return;
+            }
+        } catch (e) {
+            console.error("Error reading local cache", e);
+        }
+      }
+
+      // C. Fallback to Defaults
+      console.log("Loading default initial data");
       setData(INITIAL_DATA);
       setIsLoading(false);
     };
 
     loadData();
   }, []);
+
+  // Save to LocalStorage whenever data changes (Auto-save)
+  useEffect(() => {
+    if (data && !isLoading && isAdmin && !cloudBinId) {
+        const timer = setTimeout(() => {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+        }, 500); // Debounce save
+        return () => clearTimeout(timer);
+    }
+  }, [data, isLoading, isAdmin, cloudBinId]);
 
   const handleLanguageChange = (newLang: Language) => {
     setLang(newLang);
@@ -142,6 +188,13 @@ const App: React.FC = () => {
   const handleBinIdChange = (newId: string) => {
     localStorage.setItem('jsonbin_bin_id', newId);
     setCloudBinId(newId);
+  };
+
+  const handleResetData = () => {
+    if (window.confirm("Are you sure? This will delete your local changes and reset to default.")) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        window.location.reload();
+    }
   };
 
   const handleShareLink = () => {
@@ -218,6 +271,17 @@ const App: React.FC = () => {
           </div>
           
           <LanguageToggle currentLang={lang} onToggle={handleLanguageChange} />
+
+          {/* Reset Button (Only visible in Local Mode) */}
+          {!cloudBinId && (
+            <button 
+                onClick={handleResetData}
+                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                title="Reset to Defaults (Clear Local Cache)"
+            >
+                <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
           
           {/* Share Link Button */}
           <button 

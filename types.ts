@@ -47,6 +47,9 @@ export interface LocalizedContent {
   address: string;
   storyTitle: string;
   storyContent: string;
+  // New Editable RSVP Fields
+  rsvpTitle: string;
+  rsvpSubtitle: string;
 }
 
 export interface InvitationData {
@@ -60,6 +63,10 @@ export interface InvitationData {
   musicUrl: string;
   stickers: Sticker[];
   
+  // New Backgrounds
+  storyBackgroundImage: string; 
+  rsvpBackgroundImage: string;
+
   // Data Collection
   rsvpUrl: string; // New: Formspree or generic endpoint URL
 
@@ -97,12 +104,16 @@ export interface Translations {
   labelCover: string;
   labelStoryTitle: string;
   labelStory: string;
+  labelStoryBg: string; // New
   labelGallery: string;
   labelMusic: string;
   labelStickers: string;
-  labelRsvpUrl: string;
   labelCustomSticker: string;
   btnDetailedExport: string;
+  labelRsvpUrl: string;
+  labelRsvpBg: string; // New
+  labelRsvpTitle: string; // New
+  labelRsvpSubtitle: string; // New
   
   // Helper Labels
   labelSelectFile: string;
@@ -122,11 +133,11 @@ export interface Translations {
   noSelection: string;
 
   // Invitation Viewer Text
-  saveTheDate: string;
+  saveTheDate: string; // Default fallback
   ourStory: string;
   gallery: string;
   whenWhere: string;
-  rsvpTitle: string;
+  rsvpTitle: string; // Default fallback
   rsvpNamePlaceholder: string;
   rsvpGuestsPlaceholder: string;
   rsvpWishesPlaceholder: string;
@@ -158,14 +169,18 @@ export const LABELS: Record<Language, Translations> = {
     labelTimeFormat: "Time Format",
     labelLocation: "Venue",
     labelAddress: "Address",
-    labelCover: "Cover Photo Filename",
+    labelCover: "Cover Photo",
     labelStoryTitle: "Story Title",
     labelStory: "Story Content",
-    labelGallery: "Gallery Filenames",
-    labelMusic: "Music Filename",
+    labelStoryBg: "Story Background",
+    labelGallery: "Gallery Photos",
+    labelMusic: "Music File",
     labelStickers: "Stickers",
-    labelCustomSticker: "Add Custom Sticker (Filename)",
-    labelRsvpUrl: "RSVP URL (Formspree / Google Script)",
+    labelCustomSticker: "Add Custom Sticker",
+    labelRsvpUrl: "RSVP URL",
+    labelRsvpBg: "RSVP Background",
+    labelRsvpTitle: "RSVP Title",
+    labelRsvpSubtitle: "RSVP Subtitle",
     btnDetailedExport: "Generate Config",
 
     labelSelectFile: "Select File",
@@ -218,11 +233,15 @@ export const LABELS: Record<Language, Translations> = {
     labelCover: "封面图文件名",
     labelStoryTitle: "故事标题",
     labelStory: "故事内容",
-    labelGallery: "相册文件名 (每行一个)",
+    labelStoryBg: "故事页背景图",
+    labelGallery: "相册文件名",
     labelMusic: "音乐文件名",
     labelStickers: "贴纸",
-    labelCustomSticker: "添加自定义贴纸 (文件名)",
-    labelRsvpUrl: "回执提交地址 (Formspree / Google Script)",
+    labelCustomSticker: "添加自定义贴纸",
+    labelRsvpUrl: "回执提交地址",
+    labelRsvpBg: "回执页背景图",
+    labelRsvpTitle: "回执页主标题",
+    labelRsvpSubtitle: "回执页副标题",
     btnDetailedExport: "生成配置代码",
 
     labelSelectFile: "选择文件",
@@ -301,6 +320,6 @@ export const resolveAssetUrl = (url: string) => {
   if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) {
     return url;
   }
-  // Remove leading slash if present to avoid double slashes, ensure one leading slash
+  // Ensure it has a leading slash for local files
   return url.startsWith('/') ? url : `/${url}`;
 };
