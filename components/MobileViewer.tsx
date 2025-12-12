@@ -1,7 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { InvitationData, Language, LABELS, FontStyle, resolveAssetUrl } from '../types';
-import { Music, MapPin, Clock, Calendar, ChevronDown, Heart, Send, Sparkles, Quote, Move, Trash2, AlertCircle } from 'lucide-react';
+import { Music, MapPin, Clock, Calendar, ChevronDown, Heart, Send, Sparkles, Quote, Move, Trash2, AlertCircle, Navigation } from 'lucide-react';
 
 interface MobileViewerProps {
   data: InvitationData;
@@ -98,6 +97,26 @@ const DraggableElement: React.FC<{
     </div>
   );
 };
+
+// New Component: Static but Selectable Element (For Grid/Flex layouts where dragging breaks things)
+const EditableStaticElement: React.FC<{
+  id?: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+  className?: string;
+}> = ({ id, isSelected, onSelect, children, className }) => {
+  return (
+    <div 
+      id={id}
+      onClick={(e) => { e.stopPropagation(); onSelect(); }}
+      className={`relative transition-all duration-200 cursor-pointer ${className} ${isSelected ? 'ring-2 ring-rose-400 ring-dashed rounded-lg bg-rose-50/30' : 'hover:bg-black/5 rounded-lg'}`}
+    >
+      {children}
+    </div>
+  );
+};
+
 
 const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selectedId, onSelect, forceRsvpSuccess }) => {
   const t = LABELS[lang];
@@ -353,7 +372,13 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
   };
 
   const sp = (units: number) => `${units * 0.25 * spacingScale}rem`;
-  const mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(content.address)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
+  
+  // Dynamic Map Navigation Links
+  const encodedAddress = encodeURIComponent(content.address);
+  const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+  const wazeLink = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
+  
+  const mapUrl = `https://maps.google.com/maps?q=${encodedAddress}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
   const pStyle = { fontSize: `${1 * bodyScale}rem` };
 
   // Festive Falling Petals Animation Component
@@ -777,23 +802,138 @@ const MobileViewer: React.FC<MobileViewerProps> = ({ data, lang, onUpdate, selec
         {/* PAGE 4: INFO & MAP */}
         <section className="w-full h-full snap-start relative flex flex-col justify-center items-center bg-[#F4F4F5]" style={{ padding: 0 }}>
            <div className={`w-full bg-white px-8 py-10 rounded-b-[3rem] shadow-lg z-10 ${getAnimClass(3)}`}>
-              <h2 className={`${getFontClass(style.defaultFontStyle, 'serif')} text-gray-900 mb-8 uppercase tracking-[0.2em] text-center`} style={{ fontSize: `${2.25 * titleScale}rem` }}>{t.whenWhere}</h2>
+              
+              {/* Editable Info Title (When & Where) */}
+              <div className="text-center mb-8">
+                <EditableStaticElement
+                   id={`info_title_${lang}`}
+                   isSelected={selectedId === `info_title_${lang}`}
+                   onSelect={() => onSelect(`info_title_${lang}`)}
+                >
+                  {(() => {
+                    const s = getElStyle(`info_title_${lang}`);
+                    // Use a fallback font style if user hasn't selected one, to ensure visibility
+                    const finalFontClass = s.fontClass || getFontClass(style.defaultFontStyle, 'serif');
+                    const finalColor = s.color !== style.primaryColor ? s.color : '#111827'; // Default to dark if untouched
+                    return (
+                        <h2 className={`${finalFontClass} uppercase tracking-[0.2em]`} style={{ fontSize: `${2.25 * titleScale * s.scale}rem`, color: finalColor }}>
+                            {t.whenWhere}
+                        </h2>
+                    );
+                  })()}
+                </EditableStaticElement>
+              </div>
+
               <div className="flex justify-between items-start gap-4">
-                 <div className="text-center flex-1">
-                    <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-400 mx-auto mb-2">
+                 
+                 {/* Left Col: Time */}
+                 <div className="text-center flex-1 flex flex-col items-center">
+                    <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-400 mb-2">
                       <Calendar className="w-5 h-5" />
                     </div>
-                    <p className={`${getFontClass(style.defaultFontStyle, 'serif')} text-gray-900 font-bold`}>{formatDate(data.date)}</p>
-                    <p className="text-xs text-gray-500">{formatTimeDisplay(data.time)}</p>
+                    
+                    {/* Editable Date */}
+                    <EditableStaticElement
+                       id={`info_date_${lang}`}
+                       isSelected={selectedId === `info_date_${lang}`}
+                       onSelect={() => onSelect(`info_date_${lang}`)}
+                       className="mb-1"
+                    >
+                        {(() => {
+                           const s = getElStyle(`info_date_${lang}`);
+                           // Default black text to ensure visibility if style missing
+                           const finalColor = s.color !== style.primaryColor ? s.color : '#111827'; 
+                           return (
+                               <p className={`${s.fontClass} font-bold`} style={{ color: finalColor, transform: `scale(${s.scale})` }}>
+                                   {formatDate(data.date)}
+                               </p>
+                           );
+                        })()}
+                    </EditableStaticElement>
+
+                    {/* Editable Time */}
+                    <EditableStaticElement
+                       id={`info_time_${lang}`}
+                       isSelected={selectedId === `info_time_${lang}`}
+                       onSelect={() => onSelect(`info_time_${lang}`)}
+                    >
+                         {(() => {
+                           const s = getElStyle(`info_time_${lang}`);
+                           const finalColor = s.color !== style.primaryColor ? s.color : '#6B7280'; // Gray default
+                           return (
+                               <p className="text-xs" style={{ color: finalColor, transform: `scale(${s.scale})` }}>
+                                   {formatTimeDisplay(data.time)}
+                               </p>
+                           );
+                        })()}
+                    </EditableStaticElement>
                  </div>
+
                  <div className="w-px h-16 bg-gray-100"></div>
-                 <div className="text-center flex-1">
-                    <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-400 mx-auto mb-2">
+                 
+                 {/* Right Col: Location */}
+                 <div className="text-center flex-1 flex flex-col items-center">
+                    <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-400 mb-2">
                       <MapPin className="w-5 h-5" />
                     </div>
-                    <p className={`${getFontClass(style.defaultFontStyle, 'serif')} text-gray-900 font-bold`}>{content.location}</p>
-                    <p className="text-xs text-gray-500 truncate max-w-[100px] mx-auto">{content.address}</p>
+
+                    {/* Editable Location Name */}
+                    <EditableStaticElement
+                       id={`info_location_${lang}`}
+                       isSelected={selectedId === `info_location_${lang}`}
+                       onSelect={() => onSelect(`info_location_${lang}`)}
+                       className="mb-1"
+                    >
+                        {(() => {
+                           const s = getElStyle(`info_location_${lang}`);
+                           const finalColor = s.color !== style.primaryColor ? s.color : '#111827'; 
+                           return (
+                               <p className={`${s.fontClass} font-bold`} style={{ color: finalColor, transform: `scale(${s.scale})` }}>
+                                   {content.location}
+                               </p>
+                           );
+                        })()}
+                    </EditableStaticElement>
+
+                    {/* Editable Address */}
+                    <EditableStaticElement
+                       id={`info_address_${lang}`}
+                       isSelected={selectedId === `info_address_${lang}`}
+                       onSelect={() => onSelect(`info_address_${lang}`)}
+                    >
+                         {(() => {
+                           const s = getElStyle(`info_address_${lang}`);
+                           const finalColor = s.color !== style.primaryColor ? s.color : '#6B7280'; 
+                           return (
+                               <p className="text-xs truncate max-w-[100px]" style={{ color: finalColor, transform: `scale(${s.scale})` }}>
+                                   {content.address}
+                               </p>
+                           );
+                        })()}
+                    </EditableStaticElement>
                  </div>
+              </div>
+
+              {/* Navigation Buttons */}
+              <div className="mt-8 flex justify-center gap-3">
+                 <a 
+                   href={googleMapsLink} 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-bold shadow-sm border border-blue-100 hover:bg-blue-100 transition-colors"
+                 >
+                    <Navigation className="w-3 h-3 fill-current" />
+                    {t.navGoogle}
+                 </a>
+                 <a 
+                   href={wazeLink} 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-full text-xs font-bold shadow-sm border border-sky-100 hover:bg-sky-100 transition-colors"
+                 >
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Waze_logo.svg/256px-Waze_logo.svg.png" className="w-3 h-3 object-contain" alt="Waze" />
+                    {t.navWaze}
+                 </a>
               </div>
            </div>
            <div className="flex-1 w-full relative bg-gray-200">

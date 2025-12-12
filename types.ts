@@ -151,6 +151,10 @@ export interface Translations {
   rsvpSuccess: string;
   rsvpError: string;
   
+  // Navigation
+  navGoogle: string;
+  navWaze: string;
+
   // AI
   aiStoryPrompt: string;
   btnGenerateStory: string;
@@ -217,6 +221,9 @@ export const LABELS: Record<Language, Translations> = {
     rsvpSuccess: "Thank you! RSVP Sent.",
     rsvpError: "Failed to send. Please try again.",
     
+    navGoogle: "Google Maps",
+    navWaze: "Waze",
+    
     aiStoryPrompt: "Write a short, romantic story (max 60 words) about a couple named [GROOM] and [BRIDE] meeting and falling in love.",
     btnGenerateStory: "AI Write Story",
   },
@@ -280,6 +287,9 @@ export const LABELS: Record<Language, Translations> = {
     rsvpSuccess: "收到！感谢您的祝福！",
     rsvpError: "发送失败，请稍后重试",
     
+    navGoogle: "谷歌地图",
+    navWaze: "Waze 导航",
+
     aiStoryPrompt: "为新郎[GROOM]和新娘[BRIDE]写一段简短动人的爱情故事（60字以内）。",
     btnGenerateStory: "AI 生成故事",
   }

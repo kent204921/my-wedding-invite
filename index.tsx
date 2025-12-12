@@ -137,6 +137,19 @@ const App: React.FC = () => {
       'rsvp_subtitle_en': { color: '#ffffff', scale: 1 },
       'rsvp_success_msg_en': { color: '#ffffff', scale: 1 },
       'rsvp_success_msg_zh': { color: '#ffffff', scale: 1 },
+      
+      // New Default Styles for Info Section
+      'info_title_en': { color: '#111827', scale: 1, font: 'serif' },
+      'info_date_en': { color: '#111827', scale: 1 },
+      'info_time_en': { color: '#6B7280', scale: 1 },
+      'info_location_en': { color: '#111827', scale: 1 },
+      'info_address_en': { color: '#6B7280', scale: 1 },
+      
+      'info_title_zh': { color: '#111827', scale: 1, font: 'serif' },
+      'info_date_zh': { color: '#111827', scale: 1 },
+      'info_time_zh': { color: '#6B7280', scale: 1 },
+      'info_location_zh': { color: '#111827', scale: 1 },
+      'info_address_zh': { color: '#6B7280', scale: 1 },
     }
   };
 
